@@ -78,10 +78,6 @@ impl SpectrumData {
         self.sample_rate.store(sr.to_bits(), Ordering::Relaxed);
     }
 
-    pub fn sample_rate(&self) -> f32 {
-        f32::from_bits(self.sample_rate.load(Ordering::Relaxed))
-    }
-
     /// Batch-read all bins into a caller-owned slice (avoids per-frame allocation).
     pub fn read_all(&self, out: &mut [f32]) {
         for (i, v) in out.iter_mut().enumerate().take(self.num_bins()) {

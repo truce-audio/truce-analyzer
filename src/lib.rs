@@ -1,18 +1,21 @@
+mod core;
+
 use std::sync::Arc;
 
 use truce::prelude::*;
-use truce_analyzer_core::{
+use truce_egui::{EguiEditor, ParamState};
+
+use crate::core::{
     cqt_center_frequencies, db_to_y, format_freq, freq_to_x, x_to_freq, AnalyzerCore,
     SpectrumData, DB_FLOOR, DB_GRID, FREQ_GRID, FREQ_MAX, FREQ_MIN,
 };
-use truce_egui::{EguiEditor, ParamState};
 
 // ---------------------------------------------------------------------------
 // Parameters
 // ---------------------------------------------------------------------------
 
 #[derive(Params)]
-pub struct TruceAnalyzerEguiParams {
+pub struct TruceAnalyzerParams {
     #[param(name = "Gain", range = "linear(-60, 6)", unit = "dB", smooth = "exp(5)")]
     pub gain: FloatParam,
 }
@@ -21,13 +24,13 @@ pub struct TruceAnalyzerEguiParams {
 // Plugin
 // ---------------------------------------------------------------------------
 
-pub struct TruceAnalyzerEgui {
-    params: Arc<TruceAnalyzerEguiParams>,
+pub struct TruceAnalyzer {
+    params: Arc<TruceAnalyzerParams>,
     core: AnalyzerCore,
 }
 
-impl TruceAnalyzerEgui {
-    pub fn new(params: Arc<TruceAnalyzerEguiParams>) -> Self {
+impl TruceAnalyzer {
+    pub fn new(params: Arc<TruceAnalyzerParams>) -> Self {
         let freqs = cqt_center_frequencies();
         let spectrum = Arc::new(SpectrumData::new(freqs));
         Self {
@@ -37,7 +40,7 @@ impl TruceAnalyzerEgui {
     }
 }
 
-impl PluginLogic for TruceAnalyzerEgui {
+impl PluginLogic for TruceAnalyzer {
     fn reset(&mut self, sr: f64, _bs: usize) {
         self.params.set_sample_rate(sr);
         self.core.reset(sr);
@@ -83,8 +86,8 @@ impl PluginLogic for TruceAnalyzerEgui {
 }
 
 truce::plugin! {
-    logic: TruceAnalyzerEgui,
-    params: TruceAnalyzerEguiParams,
+    logic: TruceAnalyzer,
+    params: TruceAnalyzerParams,
     bus_layouts: [BusLayout::stereo()],
 }
 

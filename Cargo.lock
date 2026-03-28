@@ -1481,70 +1481,18 @@ dependencies = [
 ]
 
 [[package]]
-name = "truce-analyzer-core"
-version = "0.1.0"
-dependencies = [
- "rustfft",
-]
-
-[[package]]
-name = "truce-analyzer-truce-analyzer-builtin"
-version = "0.1.0"
-dependencies = [
- "clap-sys",
- "truce",
- "truce-aax",
- "truce-au",
- "truce-clap",
- "truce-gui",
- "truce-test",
- "truce-vst2",
- "truce-vst3",
-]
-
-[[package]]
-name = "truce-analyzer-truce-analyzer-egui"
+name = "truce-analyzer"
 version = "0.1.0"
 dependencies = [
  "clap-sys",
  "egui",
+ "rustfft",
  "truce",
  "truce-aax",
- "truce-analyzer-core",
  "truce-au",
  "truce-clap",
  "truce-core",
  "truce-egui",
- "truce-gui",
- "truce-test",
- "truce-vst2",
- "truce-vst3",
-]
-
-[[package]]
-name = "truce-analyzer-truce-analyzer-iced"
-version = "0.1.0"
-dependencies = [
- "clap-sys",
- "truce",
- "truce-aax",
- "truce-au",
- "truce-clap",
- "truce-gui",
- "truce-test",
- "truce-vst2",
- "truce-vst3",
-]
-
-[[package]]
-name = "truce-analyzer-truce-analyzer-slint"
-version = "0.1.0"
-dependencies = [
- "clap-sys",
- "truce",
- "truce-aax",
- "truce-au",
- "truce-clap",
  "truce-gui",
  "truce-test",
  "truce-vst2",
