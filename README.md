@@ -4,6 +4,8 @@ A real-time frequency spectrum analyzer audio plugin built with [truce](https://
 
 Uses a **Constant-Q Transform (CQT)** for logarithmically-spaced frequency resolution — each bin has bandwidth proportional to its center frequency, matching how we perceive pitch. The GUI is rendered with [egui](https://github.com/emilk/egui).
 
+![Spectrum analyzer showing five sine tones at 100 Hz, 440 Hz, 1 kHz, 5 kHz, and 10 kHz](screenshots/analyzer_spectrum.png)
+
 ## Features
 
 - CQT-based analysis with 48 bins per octave (27.5 Hz – 20.48 kHz)

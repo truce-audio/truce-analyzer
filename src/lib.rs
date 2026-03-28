@@ -302,10 +302,51 @@ fn draw_hover(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::core::{cqt_center_frequencies, AnalyzerCore, SpectrumData};
+    use std::cell::RefCell;
 
     #[test]
     fn builds_and_runs() {
         let result = truce_test::render_effect::<Plugin>(512, 44100.0);
         truce_test::assert_no_nans(&result.output);
+    }
+
+    #[test]
+    fn gui_screenshot() {
+        let freqs = cqt_center_frequencies();
+        let spectrum = Arc::new(SpectrumData::new(freqs));
+        let mut core = AnalyzerCore::new(spectrum.clone());
+        core.reset(44100.0);
+
+        // Multi-tone test signal: peaks at 100, 440, 1k, 5k, 10k Hz
+        let sr = 44100.0f32;
+        let pi2 = 2.0 * std::f32::consts::PI;
+        for i in 0..135_000 {
+            let t = i as f32 / sr;
+            let signal = 0.30 * (pi2 * 100.0 * t).sin()
+                + 0.30 * (pi2 * 440.0 * t).sin()
+                + 0.20 * (pi2 * 1000.0 * t).sin()
+                + 0.10 * (pi2 * 5000.0 * t).sin()
+                + 0.10 * (pi2 * 10000.0 * t).sin();
+            core.process_sample(signal);
+        }
+
+        let num_bins = spectrum.num_bins();
+        let bins = RefCell::new(vec![DB_FLOOR; num_bins]);
+
+        truce_egui::snapshot::assert_snapshot(
+            "screenshots",
+            "analyzer_spectrum",
+            800,
+            400,
+            2.0,
+            0,
+            Some(truce_gui::font::JETBRAINS_MONO),
+            |ctx, _state| {
+                let mut b = bins.borrow_mut();
+                spectrum.read_all(&mut b);
+                analyzer_ui(ctx, &spectrum, &b);
+            },
+        );
     }
 }
