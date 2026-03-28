@@ -3,7 +3,6 @@ mod core;
 use std::sync::Arc;
 
 use truce::prelude::*;
-use truce_egui::widgets::param_dropdown;
 use truce_egui::{EguiEditor, ParamState};
 
 use crate::core::{
@@ -174,12 +173,22 @@ fn analyzer_ui(
                         .strong(),
                 );
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    ui.add_space(10.0);
-                    let options: Vec<String> = ["Both", "Left", "Right", "Sum", "Diff"]
-                        .iter()
-                        .map(|s| s.to_string())
-                        .collect();
-                    param_dropdown(ui, state, P::Channel, "", 5, &options);
+                    ui.add_space(8.0);
+                    let channel_id: u32 = P::Channel.into();
+                    let current = state.format(channel_id);
+                    let options = ["Both", "Left", "Right", "Sum", "Diff"];
+                    egui::ComboBox::from_id_salt("channel_mode")
+                        .selected_text(current)
+                        .width(70.0)
+                        .show_ui(ui, |ui| {
+                            for (i, &label) in options.iter().enumerate() {
+                                let norm = i as f64 / (options.len() - 1) as f64;
+                                let selected = (state.get(channel_id) - norm).abs() < 0.01;
+                                if ui.selectable_label(selected, label).clicked() {
+                                    state.set_immediate(channel_id, norm);
+                                }
+                            }
+                        });
                 });
             });
         });
@@ -387,13 +396,9 @@ mod tests {
         truce_test::assert_no_nans(&result.output);
     }
 
-    #[test]
-    fn gui_screenshot() {
-        let freqs = cqt_center_frequencies();
-        let spectrum = Arc::new(SpectrumData::new(freqs));
+    fn generate_test_signal(spectrum: &Arc<SpectrumData>) {
         let mut core = AnalyzerCore::new(spectrum.clone());
         core.reset(44100.0);
-
         let sr = 44100.0f32;
         let pi2 = 2.0 * std::f32::consts::PI;
         for i in 0..135_000 {
@@ -405,6 +410,13 @@ mod tests {
                 + 0.10 * (pi2 * 10000.0 * t).sin();
             core.process_stereo(signal, signal);
         }
+    }
+
+    #[test]
+    fn gui_screenshot() {
+        let freqs = cqt_center_frequencies();
+        let spectrum = Arc::new(SpectrumData::new(freqs));
+        generate_test_signal(&spectrum);
 
         let num_bins = spectrum.num_bins();
         let bins_a = RefCell::new(vec![DB_FLOOR; num_bins]);
@@ -429,4 +441,5 @@ mod tests {
             },
         );
     }
+
 }
