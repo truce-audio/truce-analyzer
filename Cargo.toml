@@ -1,0 +1,27 @@
+[workspace]
+resolver = "2"
+members = [
+    "plugins/truce-analyzer-core",
+    "plugins/truce-analyzer-builtin",
+    "plugins/truce-analyzer-egui",
+    "plugins/truce-analyzer-iced",
+    "plugins/truce-analyzer-slint",
+]
+
+[workspace.package]
+name = "truce-analyzer"
+version = "0.1.0"
+edition = "2021"
+
+[workspace.dependencies]
+truce = { git = "https://github.com/truce-audio/truce" }
+truce-gui = { git = "https://github.com/truce-audio/truce" }
+truce-clap = { git = "https://github.com/truce-audio/truce" }
+truce-vst3 = { git = "https://github.com/truce-audio/truce" }
+truce-vst2 = { git = "https://github.com/truce-audio/truce" }
+truce-au = { git = "https://github.com/truce-audio/truce" }
+truce-aax = { git = "https://github.com/truce-audio/truce" }
+truce-test = { git = "https://github.com/truce-audio/truce" }
+truce-egui = { git = "https://github.com/truce-audio/truce" }
+truce-core = { git = "https://github.com/truce-audio/truce" }
+clap-sys = "0.5"

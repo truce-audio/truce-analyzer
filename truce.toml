@@ -1,0 +1,42 @@
+[macos]
+# Ad-hoc signing works for CLAP, VST3, VST2, AU v2.
+# AU v3 requires a Developer ID: "Developer ID Application: Your Name (TEAMID)"
+signing_identity = "-"
+
+[vendor]
+name = "TruceAnalyzer"
+id = "com.truceanalyzer"
+url = "https://example.com"
+au_manufacturer = "Truc"
+
+[[plugin]]
+name = "TruceAnalyzerBuiltin"
+suffix = "truce-analyzer-builtin"
+crate = "truce-analyzer-truce-analyzer-builtin"
+category = "effect"
+fourcc = "TABu"
+au_tag = "Effects"
+
+[[plugin]]
+name = "TruceAnalyzerEgui"
+suffix = "truce-analyzer-egui"
+crate = "truce-analyzer-truce-analyzer-egui"
+category = "effect"
+fourcc = "TAEg"
+au_tag = "Effects"
+
+[[plugin]]
+name = "TruceAnalyzerIced"
+suffix = "truce-analyzer-iced"
+crate = "truce-analyzer-truce-analyzer-iced"
+category = "effect"
+fourcc = "TAIc"
+au_tag = "Effects"
+
+[[plugin]]
+name = "TruceAnalyzerSlint"
+suffix = "truce-analyzer-slint"
+crate = "truce-analyzer-truce-analyzer-slint"
+category = "effect"
+fourcc = "TASl"
+au_tag = "Effects"
