@@ -1461,7 +1461,7 @@ dependencies = [
 [[package]]
 name = "truce"
 version = "0.1.6"
-source = "git+https://github.com/truce-audio/truce#b434c18bae082249abb759b6cd1406938f7142a9"
+source = "git+https://github.com/truce-audio/truce#6bb19baf6b3fa79ba96848913be124956116996d"
 dependencies = [
  "truce-clap",
  "truce-core",
@@ -1474,7 +1474,7 @@ dependencies = [
 [[package]]
 name = "truce-aax"
 version = "0.1.6"
-source = "git+https://github.com/truce-audio/truce#b434c18bae082249abb759b6cd1406938f7142a9"
+source = "git+https://github.com/truce-audio/truce#6bb19baf6b3fa79ba96848913be124956116996d"
 dependencies = [
  "truce-core",
  "truce-params",
@@ -1502,7 +1502,7 @@ dependencies = [
 [[package]]
 name = "truce-au"
 version = "0.1.6"
-source = "git+https://github.com/truce-audio/truce#b434c18bae082249abb759b6cd1406938f7142a9"
+source = "git+https://github.com/truce-audio/truce#6bb19baf6b3fa79ba96848913be124956116996d"
 dependencies = [
  "cc",
  "truce-core",
@@ -1513,7 +1513,7 @@ dependencies = [
 [[package]]
 name = "truce-clap"
 version = "0.1.6"
-source = "git+https://github.com/truce-audio/truce#b434c18bae082249abb759b6cd1406938f7142a9"
+source = "git+https://github.com/truce-audio/truce#6bb19baf6b3fa79ba96848913be124956116996d"
 dependencies = [
  "clap-sys",
  "truce-core",
@@ -1523,7 +1523,7 @@ dependencies = [
 [[package]]
 name = "truce-core"
 version = "0.1.6"
-source = "git+https://github.com/truce-audio/truce#b434c18bae082249abb759b6cd1406938f7142a9"
+source = "git+https://github.com/truce-audio/truce#6bb19baf6b3fa79ba96848913be124956116996d"
 dependencies = [
  "truce-params",
 ]
@@ -1531,7 +1531,7 @@ dependencies = [
 [[package]]
 name = "truce-derive"
 version = "0.1.6"
-source = "git+https://github.com/truce-audio/truce#b434c18bae082249abb759b6cd1406938f7142a9"
+source = "git+https://github.com/truce-audio/truce#6bb19baf6b3fa79ba96848913be124956116996d"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -1543,7 +1543,7 @@ dependencies = [
 [[package]]
 name = "truce-egui"
 version = "0.1.6"
-source = "git+https://github.com/truce-audio/truce#b434c18bae082249abb759b6cd1406938f7142a9"
+source = "git+https://github.com/truce-audio/truce#6bb19baf6b3fa79ba96848913be124956116996d"
 dependencies = [
  "baseview",
  "cocoa 0.26.1",
@@ -1562,7 +1562,7 @@ dependencies = [
 [[package]]
 name = "truce-gpu"
 version = "0.1.6"
-source = "git+https://github.com/truce-audio/truce#b434c18bae082249abb759b6cd1406938f7142a9"
+source = "git+https://github.com/truce-audio/truce#6bb19baf6b3fa79ba96848913be124956116996d"
 dependencies = [
  "baseview",
  "bytemuck",
@@ -1579,7 +1579,7 @@ dependencies = [
 [[package]]
 name = "truce-gui"
 version = "0.1.6"
-source = "git+https://github.com/truce-audio/truce#b434c18bae082249abb759b6cd1406938f7142a9"
+source = "git+https://github.com/truce-audio/truce#6bb19baf6b3fa79ba96848913be124956116996d"
 dependencies = [
  "cc",
  "fontdue",
@@ -1591,7 +1591,7 @@ dependencies = [
 [[package]]
 name = "truce-loader"
 version = "0.1.6"
-source = "git+https://github.com/truce-audio/truce#b434c18bae082249abb759b6cd1406938f7142a9"
+source = "git+https://github.com/truce-audio/truce#6bb19baf6b3fa79ba96848913be124956116996d"
 dependencies = [
  "libloading",
  "log",
@@ -1605,7 +1605,7 @@ dependencies = [
 [[package]]
 name = "truce-params"
 version = "0.1.6"
-source = "git+https://github.com/truce-audio/truce#b434c18bae082249abb759b6cd1406938f7142a9"
+source = "git+https://github.com/truce-audio/truce#6bb19baf6b3fa79ba96848913be124956116996d"
 dependencies = [
  "bitflags 2.11.0",
 ]
@@ -1613,7 +1613,7 @@ dependencies = [
 [[package]]
 name = "truce-params-derive"
 version = "0.1.6"
-source = "git+https://github.com/truce-audio/truce#b434c18bae082249abb759b6cd1406938f7142a9"
+source = "git+https://github.com/truce-audio/truce#6bb19baf6b3fa79ba96848913be124956116996d"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -1623,12 +1623,12 @@ dependencies = [
 [[package]]
 name = "truce-shim-types"
 version = "0.1.6"
-source = "git+https://github.com/truce-audio/truce#b434c18bae082249abb759b6cd1406938f7142a9"
+source = "git+https://github.com/truce-audio/truce#6bb19baf6b3fa79ba96848913be124956116996d"
 
 [[package]]
 name = "truce-test"
 version = "0.1.6"
-source = "git+https://github.com/truce-audio/truce#b434c18bae082249abb759b6cd1406938f7142a9"
+source = "git+https://github.com/truce-audio/truce#6bb19baf6b3fa79ba96848913be124956116996d"
 dependencies = [
  "png",
  "truce-core",
@@ -1640,7 +1640,7 @@ dependencies = [
 [[package]]
 name = "truce-vst2"
 version = "0.1.6"
-source = "git+https://github.com/truce-audio/truce#b434c18bae082249abb759b6cd1406938f7142a9"
+source = "git+https://github.com/truce-audio/truce#6bb19baf6b3fa79ba96848913be124956116996d"
 dependencies = [
  "cc",
  "truce-core",
@@ -1650,7 +1650,7 @@ dependencies = [
 [[package]]
 name = "truce-vst3"
 version = "0.1.6"
-source = "git+https://github.com/truce-audio/truce#b434c18bae082249abb759b6cd1406938f7142a9"
+source = "git+https://github.com/truce-audio/truce#6bb19baf6b3fa79ba96848913be124956116996d"
 dependencies = [
  "cc",
  "truce-core",

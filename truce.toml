@@ -2,13 +2,13 @@
 signing_identity = "-"
 
 [vendor]
-name = "TruceAnalyzer"
-id = "com.truceanalyzer"
-url = "https://example.com"
+name = "Truce Audio"
+id = "com.truce"
+url = "https://www.github.com/truce-audio/"
 au_manufacturer = "Truc"
 
 [[plugin]]
-name = "TruceAnalyzer"
+name = "Truce Analyzer"
 suffix = "truce-analyzer"
 crate = "truce-analyzer"
 category = "effect"

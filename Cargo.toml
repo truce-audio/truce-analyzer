@@ -7,7 +7,7 @@ edition = "2021"
 crate-type = ["cdylib", "rlib"]
 
 [features]
-default = ["clap", "vst3"]
+default = ["clap", "vst3", "vst2", "au", "aax"]
 clap = ["dep:truce-clap", "dep:clap-sys"]
 vst3 = ["dep:truce-vst3"]
 vst2 = ["dep:truce-vst2"]

@@ -3,22 +3,50 @@ mod core;
 use std::sync::Arc;
 
 use truce::prelude::*;
+use truce_egui::widgets::param_dropdown;
 use truce_egui::{EguiEditor, ParamState};
 
 use crate::core::{
     cqt_center_frequencies, db_to_y, format_freq, freq_to_x, x_to_freq, AnalyzerCore,
-    SpectrumData, DB_FLOOR, DB_GRID, FREQ_GRID, FREQ_MAX, FREQ_MIN,
+    SpectrumData, DB_FLOOR, DB_GRID, FREQ_GRID, FREQ_MAX, FREQ_MIN, MODE_BOTH, MODE_DIFF,
+    MODE_LEFT, MODE_RIGHT, MODE_SUM,
 };
 
 // ---------------------------------------------------------------------------
 // Parameters
 // ---------------------------------------------------------------------------
 
+#[derive(ParamEnum)]
+pub enum ChannelMode {
+    Both,
+    Left,
+    Right,
+    Sum,
+    Diff,
+}
+
+impl ChannelMode {
+    fn as_mode_u8(self) -> u8 {
+        match self {
+            Self::Left => MODE_LEFT,
+            Self::Right => MODE_RIGHT,
+            Self::Sum => MODE_SUM,
+            Self::Diff => MODE_DIFF,
+            Self::Both => MODE_BOTH,
+        }
+    }
+}
+
 #[derive(Params)]
 pub struct TruceAnalyzerParams {
     #[param(name = "Gain", range = "linear(-60, 6)", unit = "dB", smooth = "exp(5)")]
     pub gain: FloatParam,
+
+    #[param(name = "Channel")]
+    pub channel: EnumParam<ChannelMode>,
 }
+
+use TruceAnalyzerParamsParamId as P;
 
 // ---------------------------------------------------------------------------
 // Plugin
@@ -52,16 +80,29 @@ impl PluginLogic for TruceAnalyzer {
         _events: &EventList,
         _context: &mut ProcessContext,
     ) -> ProcessStatus {
-        let channels = buffer.channels().max(1);
+        let channels = buffer.channels();
+        let mode = self.params.channel.value().as_mode_u8();
+        self.core.spectrum().set_mode(mode);
+
         for i in 0..buffer.num_samples() {
             let gain = db_to_linear(self.params.gain.smoothed_next() as f64) as f32;
-            let mut mono_sum = 0.0f32;
+
+            let mut left = 0.0f32;
+            let mut right = 0.0f32;
             for ch in 0..channels {
                 let (inp, out) = buffer.io(ch);
                 out[i] = inp[i] * gain;
-                mono_sum += out[i];
+                match ch {
+                    0 => left = out[i],
+                    1 => right = out[i],
+                    _ => {}
+                }
             }
-            self.core.process_sample(mono_sum / channels as f32);
+            if channels < 2 {
+                right = left;
+            }
+
+            self.core.process_stereo(left, right);
         }
         ProcessStatus::Normal
     }
@@ -69,14 +110,18 @@ impl PluginLogic for TruceAnalyzer {
     fn custom_editor(&self) -> Option<Box<dyn truce_core::editor::Editor>> {
         let spectrum = self.core.spectrum().clone();
         let num_bins = spectrum.num_bins();
-        let mut bins = vec![DB_FLOOR; num_bins];
+        let mut bins_a = vec![DB_FLOOR; num_bins];
+        let mut bins_b = vec![DB_FLOOR; num_bins];
 
         Some(Box::new(
             EguiEditor::new(
                 (800, 400),
-                move |ctx: &egui::Context, _state: &ParamState| {
-                    spectrum.read_all(&mut bins);
-                    analyzer_ui(ctx, &spectrum, &bins);
+                move |ctx: &egui::Context, state: &ParamState| {
+                    spectrum.read_all(&mut bins_a);
+                    if spectrum.is_both() {
+                        spectrum.read_all_b(&mut bins_b);
+                    }
+                    analyzer_ui(ctx, state, &spectrum, &bins_a, &bins_b);
                 },
             )
             .with_visuals(truce_egui::theme::dark())
@@ -103,10 +148,19 @@ const HEADER_BG: egui::Color32 = egui::Color32::from_rgb(18, 18, 42);
 const HEADER_TEXT_COLOR: egui::Color32 = egui::Color32::from_rgb(106, 176, 255);
 const GRID_COLOR: egui::Color32 = egui::Color32::from_rgb(42, 42, 74);
 const LABEL_COLOR: egui::Color32 = egui::Color32::from_rgb(136, 136, 153);
-const STROKE_COLOR: egui::Color32 = egui::Color32::from_rgb(106, 176, 255);
-const FILL_COLOR: egui::Color32 = egui::Color32::from_rgba_premultiplied(30, 58, 87, 50);
 
-fn analyzer_ui(ctx: &egui::Context, spectrum: &SpectrumData, bins: &[f32]) {
+const STROKE_L: egui::Color32 = egui::Color32::from_rgb(106, 176, 255);
+const FILL_L: egui::Color32 = egui::Color32::from_rgba_premultiplied(30, 58, 87, 50);
+const STROKE_R: egui::Color32 = egui::Color32::from_rgb(255, 140, 90);
+const FILL_R: egui::Color32 = egui::Color32::from_rgba_premultiplied(87, 45, 25, 50);
+
+fn analyzer_ui(
+    ctx: &egui::Context,
+    state: &ParamState,
+    spectrum: &SpectrumData,
+    bins_a: &[f32],
+    bins_b: &[f32],
+) {
     egui::TopBottomPanel::top("header")
         .exact_height(30.0)
         .frame(egui::Frame::NONE.fill(HEADER_BG))
@@ -119,6 +173,14 @@ fn analyzer_ui(ctx: &egui::Context, spectrum: &SpectrumData, bins: &[f32]) {
                         .color(HEADER_TEXT_COLOR)
                         .strong(),
                 );
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    ui.add_space(10.0);
+                    let options: Vec<String> = ["Both", "Left", "Right", "Sum", "Diff"]
+                        .iter()
+                        .map(|s| s.to_string())
+                        .collect();
+                    param_dropdown(ui, state, P::Channel, "", 5, &options);
+                });
             });
         });
 
@@ -135,12 +197,17 @@ fn analyzer_ui(ctx: &egui::Context, spectrum: &SpectrumData, bins: &[f32]) {
             );
 
             draw_grid(&painter, spec);
-            draw_spectrum(&painter, spectrum, bins, spec);
+
+            if spectrum.is_both() {
+                draw_spectrum(&painter, spectrum, bins_b, spec, STROKE_R, FILL_R);
+            }
+            draw_spectrum(&painter, spectrum, bins_a, spec, STROKE_L, FILL_L);
+
             draw_labels(&painter, spec);
 
             if let Some(pos) = response.hover_pos() {
                 if spec.contains(pos) {
-                    draw_hover(&painter, pos, spectrum, bins, spec);
+                    draw_hover(&painter, pos, spectrum, bins_a, bins_b, spec);
                 }
             }
         });
@@ -181,6 +248,8 @@ fn draw_spectrum(
     spectrum: &SpectrumData,
     bins: &[f32],
     rect: egui::Rect,
+    stroke_color: egui::Color32,
+    fill_color: egui::Color32,
 ) {
     let mut curve_points: Vec<egui::Pos2> = Vec::with_capacity(bins.len());
 
@@ -201,8 +270,8 @@ fn draw_spectrum(
     // Filled area as a triangle-strip mesh
     let mut mesh = egui::Mesh::default();
     for (idx, &point) in curve_points.iter().enumerate() {
-        mesh.colored_vertex(point, FILL_COLOR);
-        mesh.colored_vertex(egui::pos2(point.x, rect.bottom()), FILL_COLOR);
+        mesh.colored_vertex(point, fill_color);
+        mesh.colored_vertex(egui::pos2(point.x, rect.bottom()), fill_color);
         if idx > 0 {
             let i = (idx * 2) as u32;
             mesh.add_triangle(i - 2, i - 1, i);
@@ -214,7 +283,7 @@ fn draw_spectrum(
     // Stroke on top
     painter.add(egui::Shape::line(
         curve_points,
-        egui::Stroke::new(1.5, STROKE_COLOR),
+        egui::Stroke::new(1.5, stroke_color),
     ));
 }
 
@@ -256,7 +325,8 @@ fn draw_hover(
     painter: &egui::Painter,
     pos: egui::Pos2,
     spectrum: &SpectrumData,
-    bins: &[f32],
+    bins_a: &[f32],
+    bins_b: &[f32],
     rect: egui::Rect,
 ) {
     let crosshair = egui::Color32::from_white_alpha(40);
@@ -277,14 +347,20 @@ fn draw_hover(
 
     let freq = x_to_freq(pos.x, rect.left(), rect.width());
     let bin = spectrum.nearest_bin(freq);
-    let db = bins[bin];
+    let db_a = bins_a[bin];
 
     let freq_str = if freq >= 1000.0 {
         format!("{:.1} kHz", freq / 1000.0)
     } else {
         format!("{:.0} Hz", freq)
     };
-    let label = format!("{}  {:.1} dB", freq_str, db);
+
+    let label = if spectrum.is_both() {
+        let db_b = bins_b[bin];
+        format!("{}  L {:.1} dB  R {:.1} dB", freq_str, db_a, db_b)
+    } else {
+        format!("{}  {:.1} dB", freq_str, db_a)
+    };
 
     painter.text(
         egui::pos2(pos.x + 10.0, pos.y - 4.0),
@@ -318,7 +394,6 @@ mod tests {
         let mut core = AnalyzerCore::new(spectrum.clone());
         core.reset(44100.0);
 
-        // Multi-tone test signal: peaks at 100, 440, 1k, 5k, 10k Hz
         let sr = 44100.0f32;
         let pi2 = 2.0 * std::f32::consts::PI;
         for i in 0..135_000 {
@@ -328,11 +403,12 @@ mod tests {
                 + 0.20 * (pi2 * 1000.0 * t).sin()
                 + 0.10 * (pi2 * 5000.0 * t).sin()
                 + 0.10 * (pi2 * 10000.0 * t).sin();
-            core.process_sample(signal);
+            core.process_stereo(signal, signal);
         }
 
         let num_bins = spectrum.num_bins();
-        let bins = RefCell::new(vec![DB_FLOOR; num_bins]);
+        let bins_a = RefCell::new(vec![DB_FLOOR; num_bins]);
+        let bins_b = RefCell::new(vec![DB_FLOOR; num_bins]);
 
         truce_egui::snapshot::assert_snapshot(
             "screenshots",
@@ -342,10 +418,14 @@ mod tests {
             2.0,
             0,
             Some(truce_gui::font::JETBRAINS_MONO),
-            |ctx, _state| {
-                let mut b = bins.borrow_mut();
-                spectrum.read_all(&mut b);
-                analyzer_ui(ctx, &spectrum, &b);
+            |ctx, state| {
+                let mut a = bins_a.borrow_mut();
+                let mut b = bins_b.borrow_mut();
+                spectrum.read_all(&mut a);
+                if spectrum.is_both() {
+                    spectrum.read_all_b(&mut b);
+                }
+                analyzer_ui(ctx, state, &spectrum, &a, &b);
             },
         );
     }

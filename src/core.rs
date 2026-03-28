@@ -1,4 +1,4 @@
-use std::sync::atomic::{AtomicU32, Ordering};
+use std::sync::atomic::{AtomicU32, AtomicU8, Ordering};
 use std::sync::Arc;
 
 use rustfft::num_complex::Complex;
@@ -22,6 +22,16 @@ const SMOOTH_DOWN: f32 = 0.8;
 const HOP_SIZE: usize = 2048;
 const KERNEL_SPARSITY_THRESHOLD: f32 = 0.001;
 
+// ---------------------------------------------------------------------------
+// Channel mode constants (matches ChannelMode enum order in lib.rs)
+// ---------------------------------------------------------------------------
+
+pub const MODE_BOTH: u8 = 0;
+pub const MODE_LEFT: u8 = 1;
+pub const MODE_RIGHT: u8 = 2;
+pub const MODE_SUM: u8 = 3;
+pub const MODE_DIFF: u8 = 4;
+
 /// Compute center frequencies for all CQT bins.
 pub fn cqt_center_frequencies() -> Vec<f32> {
     let num_octaves = (CQT_F_MAX / CQT_F_MIN).log2();
@@ -41,20 +51,29 @@ fn q_factor() -> f64 {
 // ---------------------------------------------------------------------------
 
 pub struct SpectrumData {
-    bins: Box<[AtomicU32]>,
+    bins_a: Box<[AtomicU32]>,
+    bins_b: Box<[AtomicU32]>,
     center_freqs: Box<[f32]>,
     sample_rate: AtomicU32,
+    mode: AtomicU8,
+}
+
+fn make_bins(n: usize) -> Box<[AtomicU32]> {
+    (0..n)
+        .map(|_| AtomicU32::new(DB_FLOOR.to_bits()))
+        .collect::<Vec<_>>()
+        .into_boxed_slice()
 }
 
 impl SpectrumData {
     pub fn new(center_freqs: Vec<f32>) -> Self {
-        let bins: Vec<AtomicU32> = (0..center_freqs.len())
-            .map(|_| AtomicU32::new(DB_FLOOR.to_bits()))
-            .collect();
+        let n = center_freqs.len();
         Self {
-            bins: bins.into_boxed_slice(),
+            bins_a: make_bins(n),
+            bins_b: make_bins(n),
             center_freqs: center_freqs.into_boxed_slice(),
             sample_rate: AtomicU32::new(44100.0_f32.to_bits()),
+            mode: AtomicU8::new(MODE_BOTH),
         }
     }
 
@@ -67,22 +86,47 @@ impl SpectrumData {
     }
 
     pub fn write_bin(&self, index: usize, db: f32) {
-        self.bins[index].store(db.to_bits(), Ordering::Relaxed);
+        self.bins_a[index].store(db.to_bits(), Ordering::Relaxed);
     }
 
     pub fn read_bin(&self, index: usize) -> f32 {
-        f32::from_bits(self.bins[index].load(Ordering::Relaxed))
+        f32::from_bits(self.bins_a[index].load(Ordering::Relaxed))
+    }
+
+    pub fn write_bin_b(&self, index: usize, db: f32) {
+        self.bins_b[index].store(db.to_bits(), Ordering::Relaxed);
+    }
+
+    pub fn read_bin_b(&self, index: usize) -> f32 {
+        f32::from_bits(self.bins_b[index].load(Ordering::Relaxed))
     }
 
     pub fn set_sample_rate(&self, sr: f32) {
         self.sample_rate.store(sr.to_bits(), Ordering::Relaxed);
     }
 
-    /// Batch-read all bins into a caller-owned slice (avoids per-frame allocation).
     pub fn read_all(&self, out: &mut [f32]) {
         for (i, v) in out.iter_mut().enumerate().take(self.num_bins()) {
             *v = self.read_bin(i);
         }
+    }
+
+    pub fn read_all_b(&self, out: &mut [f32]) {
+        for (i, v) in out.iter_mut().enumerate().take(self.num_bins()) {
+            *v = self.read_bin_b(i);
+        }
+    }
+
+    pub fn set_mode(&self, mode: u8) {
+        self.mode.store(mode, Ordering::Relaxed);
+    }
+
+    pub fn mode(&self) -> u8 {
+        self.mode.load(Ordering::Relaxed)
+    }
+
+    pub fn is_both(&self) -> bool {
+        self.mode() == MODE_BOTH
     }
 
     /// Find the CQT bin nearest to a given frequency (O(1) for log-spaced bins).
@@ -141,7 +185,6 @@ fn generate_kernels(
 
             fft.process_with_scratch(&mut kernel, &mut scratch);
 
-            // Conjugate and keep only significant entries
             let max_mag = kernel.iter().map(|c| c.norm()).fold(0.0f32, f32::max);
             let threshold = max_mag * KERNEL_SPARSITY_THRESHOLD;
 
@@ -157,6 +200,30 @@ fn generate_kernels(
         .collect()
 }
 
+/// Apply sparse CQT dot products to an already-FFT'd signal buffer.
+fn apply_cqt(
+    signal: &[Complex<f32>],
+    kernels: &[SparseKernel],
+    smoothed: &mut [f32],
+    fft_size: usize,
+) {
+    for (q, kernel) in kernels.iter().enumerate() {
+        let mut sum = Complex::new(0.0f32, 0.0);
+        for &(k, coeff) in &kernel.entries {
+            sum += signal[k] * coeff;
+        }
+        let magnitude = sum.norm() / fft_size as f32;
+        let db = (20.0 * magnitude.max(1e-10).log10()).clamp(DB_FLOOR, DB_CEIL);
+
+        let alpha = if db > smoothed[q] {
+            SMOOTH_UP
+        } else {
+            SMOOTH_DOWN
+        };
+        smoothed[q] += alpha * (db - smoothed[q]);
+    }
+}
+
 // ---------------------------------------------------------------------------
 // AnalyzerCore — CQT processor running on the audio thread
 // ---------------------------------------------------------------------------
@@ -164,15 +231,16 @@ fn generate_kernels(
 pub struct AnalyzerCore {
     spectrum: Arc<SpectrumData>,
 
-    // Reconfigured on reset() (sample-rate dependent)
     fft_size: usize,
     fft: Option<Arc<dyn Fft<f32>>>,
     kernels: Vec<SparseKernel>,
     signal_buf: Vec<Complex<f32>>,
-    ring_buffer: Vec<f32>,
+    ring_left: Vec<f32>,
+    ring_right: Vec<f32>,
     ring_pos: usize,
     hop_counter: usize,
-    smoothed: Vec<f32>,
+    smoothed_a: Vec<f32>,
+    smoothed_b: Vec<f32>,
 }
 
 impl AnalyzerCore {
@@ -184,22 +252,22 @@ impl AnalyzerCore {
             fft: None,
             kernels: Vec::new(),
             signal_buf: Vec::new(),
-            ring_buffer: Vec::new(),
+            ring_left: Vec::new(),
+            ring_right: Vec::new(),
             ring_pos: 0,
             hop_counter: 0,
-            smoothed: vec![DB_FLOOR; num_bins],
+            smoothed_a: vec![DB_FLOOR; num_bins],
+            smoothed_b: vec![DB_FLOOR; num_bins],
         }
     }
 
     pub fn reset(&mut self, sample_rate: f64) {
         self.spectrum.set_sample_rate(sample_rate as f32);
 
-        // Determine FFT size from the longest CQT window (lowest frequency bin)
         let q = q_factor();
         let max_window = (q * sample_rate / CQT_F_MIN as f64).ceil() as usize;
         self.fft_size = max_window.next_power_of_two();
 
-        // Build FFT plan and CQT kernels
         let mut planner = FftPlanner::new();
         let fft = planner.plan_fft_forward(self.fft_size);
         self.kernels = generate_kernels(
@@ -210,20 +278,22 @@ impl AnalyzerCore {
         );
         self.fft = Some(fft);
 
-        // Allocate buffers
         self.signal_buf = vec![Complex::new(0.0, 0.0); self.fft_size];
-        self.ring_buffer = vec![0.0; self.fft_size];
+        self.ring_left = vec![0.0; self.fft_size];
+        self.ring_right = vec![0.0; self.fft_size];
         self.ring_pos = 0;
         self.hop_counter = 0;
-        self.smoothed.fill(DB_FLOOR);
+        self.smoothed_a.fill(DB_FLOOR);
+        self.smoothed_b.fill(DB_FLOOR);
     }
 
-    pub fn process_sample(&mut self, sample: f32) {
+    pub fn process_stereo(&mut self, left: f32, right: f32) {
         if self.fft_size == 0 {
-            return; // not yet initialized
+            return;
         }
 
-        self.ring_buffer[self.ring_pos] = sample;
+        self.ring_left[self.ring_pos] = left;
+        self.ring_right[self.ring_pos] = right;
         self.ring_pos = (self.ring_pos + 1) % self.fft_size;
         self.hop_counter += 1;
 
@@ -238,32 +308,46 @@ impl AnalyzerCore {
             Some(f) => f.clone(),
             None => return,
         };
+        let mode = self.spectrum.mode();
 
-        // Copy ring buffer to signal_buf in chronological order
+        // Fill signal_buf with the primary derived signal
         for i in 0..self.fft_size {
             let idx = (self.ring_pos + i) % self.fft_size;
-            self.signal_buf[i] = Complex::new(self.ring_buffer[idx], 0.0);
+            let sample = match mode {
+                MODE_RIGHT => self.ring_right[idx],
+                MODE_SUM => (self.ring_left[idx] + self.ring_right[idx]) * 0.5,
+                MODE_DIFF => (self.ring_left[idx] - self.ring_right[idx]) * 0.5,
+                _ => self.ring_left[idx], // Left, Both (primary = L)
+            };
+            self.signal_buf[i] = Complex::new(sample, 0.0);
+        }
+        fft.process(&mut self.signal_buf);
+        apply_cqt(
+            &self.signal_buf,
+            &self.kernels,
+            &mut self.smoothed_a,
+            self.fft_size,
+        );
+        for (q, &db) in self.smoothed_a.iter().enumerate() {
+            self.spectrum.write_bin(q, db);
         }
 
-        // Forward FFT of the signal
-        fft.process(&mut self.signal_buf);
-
-        // Sparse dot product for each CQT bin
-        for (q, kernel) in self.kernels.iter().enumerate() {
-            let mut sum = Complex::new(0.0f32, 0.0);
-            for &(k, coeff) in &kernel.entries {
-                sum += self.signal_buf[k] * coeff;
+        // Both mode: also analyse the right channel
+        if mode == MODE_BOTH {
+            for i in 0..self.fft_size {
+                let idx = (self.ring_pos + i) % self.fft_size;
+                self.signal_buf[i] = Complex::new(self.ring_right[idx], 0.0);
             }
-            let magnitude = sum.norm() / self.fft_size as f32;
-            let db = (20.0 * magnitude.max(1e-10).log10()).clamp(DB_FLOOR, DB_CEIL);
-
-            let alpha = if db > self.smoothed[q] {
-                SMOOTH_UP
-            } else {
-                SMOOTH_DOWN
-            };
-            self.smoothed[q] += alpha * (db - self.smoothed[q]);
-            self.spectrum.write_bin(q, self.smoothed[q]);
+            fft.process(&mut self.signal_buf);
+            apply_cqt(
+                &self.signal_buf,
+                &self.kernels,
+                &mut self.smoothed_b,
+                self.fft_size,
+            );
+            for (q, &db) in self.smoothed_b.iter().enumerate() {
+                self.spectrum.write_bin_b(q, db);
+            }
         }
     }
 
