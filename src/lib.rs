@@ -399,6 +399,7 @@ mod tests {
     fn generate_test_signal(spectrum: &Arc<SpectrumData>) {
         let mut core = AnalyzerCore::new(spectrum.clone());
         core.reset(44100.0);
+        core.wait_for_kernels();
         let sr = 44100.0f32;
         let pi2 = 2.0 * std::f32::consts::PI;
         for i in 0..135_000 {

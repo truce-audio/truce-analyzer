@@ -1,4 +1,5 @@
 use std::sync::atomic::{AtomicU32, AtomicU8, Ordering};
+use std::sync::mpsc;
 use std::sync::Arc;
 
 use rustfft::num_complex::Complex;
@@ -228,15 +229,18 @@ fn apply_cqt(
 // AnalyzerCore — CQT processor running on the audio thread
 // ---------------------------------------------------------------------------
 
+struct KernelData {
+    kernels: Vec<SparseKernel>,
+    fft: Arc<dyn Fft<f32>>,
+}
+
 pub struct AnalyzerCore {
     spectrum: Arc<SpectrumData>,
 
-    // Reconfigured on reset(); kernels generated lazily on first run_cqt()
-    sample_rate: f64,
     fft_size: usize,
     fft: Option<Arc<dyn Fft<f32>>>,
     kernels: Vec<SparseKernel>,
-    kernels_stale: bool,
+    kernel_rx: Option<mpsc::Receiver<KernelData>>,
     signal_buf: Vec<Complex<f32>>,
     ring_left: Vec<f32>,
     ring_right: Vec<f32>,
@@ -251,11 +255,10 @@ impl AnalyzerCore {
         let num_bins = spectrum.num_bins();
         Self {
             spectrum,
-            sample_rate: 0.0,
             fft_size: 0,
             fft: None,
             kernels: Vec::new(),
-            kernels_stale: true,
+            kernel_rx: None,
             signal_buf: Vec::new(),
             ring_left: Vec::new(),
             ring_right: Vec::new(),
@@ -274,20 +277,28 @@ impl AnalyzerCore {
         let new_fft_size = max_window.next_power_of_two();
 
         if new_fft_size != self.fft_size {
-            // Sample rate changed — reallocate buffers, defer kernel generation
-            // to first run_cqt() so hosts never block on init.
+            // Sample rate changed — reallocate buffers, generate kernels on
+            // a background thread so neither init nor audio thread blocks.
             self.fft_size = new_fft_size;
-            self.sample_rate = sample_rate;
             self.signal_buf = vec![Complex::new(0.0, 0.0); self.fft_size];
             self.ring_left = vec![0.0; self.fft_size];
             self.ring_right = vec![0.0; self.fft_size];
             self.fft = None;
             self.kernels.clear();
-            self.kernels_stale = true;
+
+            let (tx, rx) = mpsc::channel();
+            self.kernel_rx = Some(rx);
+            let spectrum = self.spectrum.clone();
+            let fft_size = self.fft_size;
+            std::thread::spawn(move || {
+                let mut planner = FftPlanner::new();
+                let fft = planner.plan_fft_forward(fft_size);
+                let kernels =
+                    generate_kernels(&spectrum.center_freqs, sample_rate, fft_size, &fft);
+                let _ = tx.send(KernelData { kernels, fft });
+            });
         } else {
             // Same sample rate — keep existing kernels, just clear buffers.
-            // This avoids blocking the audio thread when hosts call reset()
-            // without a sample rate change (e.g., moving plugin between slots).
             self.ring_left.fill(0.0);
             self.ring_right.fill(0.0);
         }
@@ -298,23 +309,15 @@ impl AnalyzerCore {
         self.smoothed_b.fill(DB_FLOOR);
     }
 
-    /// Generate FFT plan and CQT kernels. Called lazily from the audio thread
-    /// on the first hop after reset(), so hosts never block on init.
-    fn ensure_kernels(&mut self) {
-        if !self.kernels_stale {
-            return;
+    /// Block until background kernel generation completes (for tests).
+    #[allow(dead_code)]
+    pub fn wait_for_kernels(&mut self) {
+        if let Some(rx) = self.kernel_rx.take() {
+            if let Ok(data) = rx.recv() {
+                self.kernels = data.kernels;
+                self.fft = Some(data.fft);
+            }
         }
-        self.kernels_stale = false;
-
-        let mut planner = FftPlanner::new();
-        let fft = planner.plan_fft_forward(self.fft_size);
-        self.kernels = generate_kernels(
-            &self.spectrum.center_freqs,
-            self.sample_rate,
-            self.fft_size,
-            &fft,
-        );
-        self.fft = Some(fft);
     }
 
     pub fn process_stereo(&mut self, left: f32, right: f32) {
@@ -334,7 +337,22 @@ impl AnalyzerCore {
     }
 
     fn run_cqt(&mut self) {
-        self.ensure_kernels();
+        // Pick up kernels from background thread if ready
+        if let Some(rx) = &self.kernel_rx {
+            match rx.try_recv() {
+                Ok(data) => {
+                    self.kernels = data.kernels;
+                    self.fft = Some(data.fft);
+                    self.kernel_rx = None;
+                }
+                Err(mpsc::TryRecvError::Empty) => return,
+                Err(mpsc::TryRecvError::Disconnected) => {
+                    self.kernel_rx = None;
+                    return;
+                }
+            }
+        }
+
         let fft = match &self.fft {
             Some(f) => f.clone(),
             None => return,
