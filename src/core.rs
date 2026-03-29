@@ -267,25 +267,35 @@ impl AnalyzerCore {
     }
 
     pub fn reset(&mut self, sample_rate: f64) {
-        self.sample_rate = sample_rate;
         self.spectrum.set_sample_rate(sample_rate as f32);
 
         let q = q_factor();
         let max_window = (q * sample_rate / CQT_F_MIN as f64).ceil() as usize;
-        self.fft_size = max_window.next_power_of_two();
+        let new_fft_size = max_window.next_power_of_two();
 
-        // Allocate buffers but defer kernel generation to first run_cqt().
-        // This keeps reset() fast, avoiding timeouts in hosts like Pro Tools (AAX).
-        self.signal_buf = vec![Complex::new(0.0, 0.0); self.fft_size];
-        self.ring_left = vec![0.0; self.fft_size];
-        self.ring_right = vec![0.0; self.fft_size];
+        if new_fft_size != self.fft_size {
+            // Sample rate changed — reallocate buffers, defer kernel generation
+            // to first run_cqt() so hosts never block on init.
+            self.fft_size = new_fft_size;
+            self.sample_rate = sample_rate;
+            self.signal_buf = vec![Complex::new(0.0, 0.0); self.fft_size];
+            self.ring_left = vec![0.0; self.fft_size];
+            self.ring_right = vec![0.0; self.fft_size];
+            self.fft = None;
+            self.kernels.clear();
+            self.kernels_stale = true;
+        } else {
+            // Same sample rate — keep existing kernels, just clear buffers.
+            // This avoids blocking the audio thread when hosts call reset()
+            // without a sample rate change (e.g., moving plugin between slots).
+            self.ring_left.fill(0.0);
+            self.ring_right.fill(0.0);
+        }
+
         self.ring_pos = 0;
         self.hop_counter = 0;
         self.smoothed_a.fill(DB_FLOOR);
         self.smoothed_b.fill(DB_FLOOR);
-        self.fft = None;
-        self.kernels.clear();
-        self.kernels_stale = true;
     }
 
     /// Generate FFT plan and CQT kernels. Called lazily from the audio thread
