@@ -1,5 +1,5 @@
 [macos]
-signing_identity = "-"
+signing_identity = "Developer ID Application: Soonhan Koh (45Q47UJ3C7)"
 
 [vendor]
 name = "Truce Audio"

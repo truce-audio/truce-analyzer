@@ -80,6 +80,9 @@ impl PluginLogic for TruceAnalyzer {
         _context: &mut ProcessContext,
     ) -> ProcessStatus {
         let channels = buffer.channels();
+        if channels == 0 {
+            return ProcessStatus::Normal;
+        }
         let mode = self.params.channel.value().as_mode_u8();
         self.core.spectrum().set_mode(mode);
 
@@ -142,12 +145,9 @@ truce::plugin! {
 const LEFT_MARGIN: f32 = 45.0;
 const BOTTOM_MARGIN: f32 = 20.0;
 
-const BG_COLOR: egui::Color32 = egui::Color32::from_rgb(26, 26, 46);
-const HEADER_BG: egui::Color32 = egui::Color32::from_rgb(18, 18, 42);
-const HEADER_TEXT_COLOR: egui::Color32 = egui::Color32::from_rgb(106, 176, 255);
-const GRID_COLOR: egui::Color32 = egui::Color32::from_rgb(42, 42, 74);
-const LABEL_COLOR: egui::Color32 = egui::Color32::from_rgb(136, 136, 153);
+use truce_egui::theme;
 
+const GRID_COLOR: egui::Color32 = egui::Color32::from_rgb(42, 42, 74);
 const STROKE_L: egui::Color32 = egui::Color32::from_rgb(106, 176, 255);
 const FILL_L: egui::Color32 = egui::Color32::from_rgba_premultiplied(30, 58, 87, 50);
 const STROKE_R: egui::Color32 = egui::Color32::from_rgb(255, 140, 90);
@@ -162,14 +162,14 @@ fn analyzer_ui(
 ) {
     egui::TopBottomPanel::top("header")
         .exact_height(30.0)
-        .frame(egui::Frame::NONE.fill(HEADER_BG))
+        .frame(egui::Frame::NONE.fill(theme::HEADER_BG))
         .show(ctx, |ui| {
             ui.horizontal_centered(|ui| {
                 ui.add_space(10.0);
                 ui.label(
                     egui::RichText::new("TRUCE ANALYZER")
                         .size(14.0)
-                        .color(HEADER_TEXT_COLOR)
+                        .color(theme::PRIMARY)
                         .strong(),
                 );
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
@@ -194,7 +194,7 @@ fn analyzer_ui(
         });
 
     egui::CentralPanel::default()
-        .frame(egui::Frame::NONE.fill(BG_COLOR))
+        .frame(egui::Frame::NONE.fill(theme::BACKGROUND))
         .show(ctx, |ui| {
             let (response, painter) =
                 ui.allocate_painter(ui.available_size(), egui::Sense::hover());
@@ -221,7 +221,7 @@ fn analyzer_ui(
             }
         });
 
-    ctx.request_repaint();
+    ctx.request_repaint_after(std::time::Duration::from_millis(33));
 }
 
 // ---------------------------------------------------------------------------
@@ -310,7 +310,7 @@ fn draw_labels(painter: &egui::Painter, spec: egui::Rect) {
             egui::Align2::RIGHT_CENTER,
             format!("{}", db as i32),
             font.clone(),
-            LABEL_COLOR,
+            theme::TEXT_DIM,
         );
     }
 
@@ -321,7 +321,7 @@ fn draw_labels(painter: &egui::Painter, spec: egui::Rect) {
             egui::Align2::CENTER_TOP,
             format_freq(freq),
             font.clone(),
-            LABEL_COLOR,
+            theme::TEXT_DIM,
         );
     }
 }
@@ -422,7 +422,7 @@ mod tests {
         let bins_a = RefCell::new(vec![DB_FLOOR; num_bins]);
         let bins_b = RefCell::new(vec![DB_FLOOR; num_bins]);
 
-        truce_egui::snapshot::assert_snapshot(
+        truce_egui::snapshot::assert_snapshot::<TruceAnalyzerParams>(
             "screenshots",
             "analyzer_spectrum",
             800,

@@ -231,9 +231,12 @@ fn apply_cqt(
 pub struct AnalyzerCore {
     spectrum: Arc<SpectrumData>,
 
+    // Reconfigured on reset(); kernels generated lazily on first run_cqt()
+    sample_rate: f64,
     fft_size: usize,
     fft: Option<Arc<dyn Fft<f32>>>,
     kernels: Vec<SparseKernel>,
+    kernels_stale: bool,
     signal_buf: Vec<Complex<f32>>,
     ring_left: Vec<f32>,
     ring_right: Vec<f32>,
@@ -248,9 +251,11 @@ impl AnalyzerCore {
         let num_bins = spectrum.num_bins();
         Self {
             spectrum,
+            sample_rate: 0.0,
             fft_size: 0,
             fft: None,
             kernels: Vec::new(),
+            kernels_stale: true,
             signal_buf: Vec::new(),
             ring_left: Vec::new(),
             ring_right: Vec::new(),
@@ -262,22 +267,15 @@ impl AnalyzerCore {
     }
 
     pub fn reset(&mut self, sample_rate: f64) {
+        self.sample_rate = sample_rate;
         self.spectrum.set_sample_rate(sample_rate as f32);
 
         let q = q_factor();
         let max_window = (q * sample_rate / CQT_F_MIN as f64).ceil() as usize;
         self.fft_size = max_window.next_power_of_two();
 
-        let mut planner = FftPlanner::new();
-        let fft = planner.plan_fft_forward(self.fft_size);
-        self.kernels = generate_kernels(
-            &self.spectrum.center_freqs,
-            sample_rate,
-            self.fft_size,
-            &fft,
-        );
-        self.fft = Some(fft);
-
+        // Allocate buffers but defer kernel generation to first run_cqt().
+        // This keeps reset() fast, avoiding timeouts in hosts like Pro Tools (AAX).
         self.signal_buf = vec![Complex::new(0.0, 0.0); self.fft_size];
         self.ring_left = vec![0.0; self.fft_size];
         self.ring_right = vec![0.0; self.fft_size];
@@ -285,6 +283,28 @@ impl AnalyzerCore {
         self.hop_counter = 0;
         self.smoothed_a.fill(DB_FLOOR);
         self.smoothed_b.fill(DB_FLOOR);
+        self.fft = None;
+        self.kernels.clear();
+        self.kernels_stale = true;
+    }
+
+    /// Generate FFT plan and CQT kernels. Called lazily from the audio thread
+    /// on the first hop after reset(), so hosts never block on init.
+    fn ensure_kernels(&mut self) {
+        if !self.kernels_stale {
+            return;
+        }
+        self.kernels_stale = false;
+
+        let mut planner = FftPlanner::new();
+        let fft = planner.plan_fft_forward(self.fft_size);
+        self.kernels = generate_kernels(
+            &self.spectrum.center_freqs,
+            self.sample_rate,
+            self.fft_size,
+            &fft,
+        );
+        self.fft = Some(fft);
     }
 
     pub fn process_stereo(&mut self, left: f32, right: f32) {
@@ -304,6 +324,7 @@ impl AnalyzerCore {
     }
 
     fn run_cqt(&mut self) {
+        self.ensure_kernels();
         let fft = match &self.fft {
             Some(f) => f.clone(),
             None => return,
