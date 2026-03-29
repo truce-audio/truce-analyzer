@@ -57,6 +57,7 @@ pub struct SpectrumData {
     center_freqs: Box<[f32]>,
     sample_rate: AtomicU32,
     mode: AtomicU8,
+    version: AtomicU32,
 }
 
 fn make_bins(n: usize) -> Box<[AtomicU32]> {
@@ -75,6 +76,7 @@ impl SpectrumData {
             center_freqs: center_freqs.into_boxed_slice(),
             sample_rate: AtomicU32::new(44100.0_f32.to_bits()),
             mode: AtomicU8::new(MODE_BOTH),
+            version: AtomicU32::new(0),
         }
     }
 
@@ -128,6 +130,14 @@ impl SpectrumData {
 
     pub fn is_both(&self) -> bool {
         self.mode() == MODE_BOTH
+    }
+
+    pub fn version(&self) -> u32 {
+        self.version.load(Ordering::Relaxed)
+    }
+
+    fn bump_version(&self) {
+        self.version.fetch_add(1, Ordering::Relaxed);
     }
 
     /// Find the CQT bin nearest to a given frequency (O(1) for log-spaced bins).
@@ -398,6 +408,8 @@ impl AnalyzerCore {
                 self.spectrum.write_bin_b(q, db);
             }
         }
+
+        self.spectrum.bump_version();
     }
 
     pub fn spectrum(&self) -> &Arc<SpectrumData> {

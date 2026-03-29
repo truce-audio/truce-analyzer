@@ -114,14 +114,19 @@ impl PluginLogic for TruceAnalyzer {
         let num_bins = spectrum.num_bins();
         let mut bins_a = vec![DB_FLOOR; num_bins];
         let mut bins_b = vec![DB_FLOOR; num_bins];
+        let mut last_version = 0u32;
 
         Some(Box::new(
             EguiEditor::new(
                 (800, 400),
                 move |ctx: &egui::Context, state: &ParamState| {
-                    spectrum.read_all(&mut bins_a);
-                    if spectrum.is_both() {
-                        spectrum.read_all_b(&mut bins_b);
+                    let version = spectrum.version();
+                    if version != last_version {
+                        last_version = version;
+                        spectrum.read_all(&mut bins_a);
+                        if spectrum.is_both() {
+                            spectrum.read_all_b(&mut bins_b);
+                        }
                     }
                     analyzer_ui(ctx, state, &spectrum, &bins_a, &bins_b);
                 },
@@ -262,12 +267,18 @@ fn draw_spectrum(
 ) {
     let mut curve_points: Vec<egui::Pos2> = Vec::with_capacity(bins.len());
 
+    let mut last_px = -1i32;
     for (i, &db) in bins.iter().enumerate() {
         let freq = spectrum.center_freq(i);
         if freq < FREQ_MIN || freq > FREQ_MAX {
             continue;
         }
         let x = freq_to_x(freq, rect.left(), rect.width());
+        let px = x as i32;
+        if px == last_px {
+            continue; // skip sub-pixel duplicates
+        }
+        last_px = px;
         let y = db_to_y(db, rect.top(), rect.height());
         curve_points.push(egui::pos2(x, y));
     }
