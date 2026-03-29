@@ -148,6 +148,8 @@ truce::plugin! {
 // ---------------------------------------------------------------------------
 
 const LEFT_MARGIN: f32 = 45.0;
+const TOP_MARGIN: f32 = 10.0;
+const RIGHT_MARGIN: f32 = 10.0;
 const BOTTOM_MARGIN: f32 = 20.0;
 
 use truce_egui::theme;
@@ -206,8 +208,8 @@ fn analyzer_ui(
             let rect = response.rect;
 
             let spec = egui::Rect::from_min_max(
-                egui::pos2(rect.left() + LEFT_MARGIN, rect.top()),
-                egui::pos2(rect.right(), rect.bottom() - BOTTOM_MARGIN),
+                egui::pos2(rect.left() + LEFT_MARGIN, rect.top() + TOP_MARGIN),
+                egui::pos2(rect.right() - RIGHT_MARGIN, rect.bottom() - BOTTOM_MARGIN),
             );
 
             draw_grid(&painter, spec);
