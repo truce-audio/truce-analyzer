@@ -1,8 +1,10 @@
-use std::sync::atomic::{AtomicU32, AtomicU8, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU8, Ordering};
 use std::sync::mpsc;
 use std::sync::Arc;
 
 use rustfft::num_complex::Complex;
+
+use crate::shmem::SharedMemoryWriter;
 use rustfft::{Fft, FftPlanner};
 
 // ---------------------------------------------------------------------------
@@ -27,10 +29,10 @@ const KERNEL_SPARSITY_THRESHOLD: f32 = 0.001;
 // Channel mode constants (matches ChannelMode enum order in lib.rs)
 // ---------------------------------------------------------------------------
 
-pub const MODE_BOTH: u8 = 0;
-pub const MODE_LEFT: u8 = 1;
-pub const MODE_RIGHT: u8 = 2;
-pub const MODE_SUM: u8 = 3;
+pub const MODE_SUM: u8 = 0;
+pub const MODE_BOTH: u8 = 1;
+pub const MODE_LEFT: u8 = 2;
+pub const MODE_RIGHT: u8 = 3;
 pub const MODE_DIFF: u8 = 4;
 
 /// Compute center frequencies for all CQT bins.
@@ -58,6 +60,7 @@ pub struct SpectrumData {
     sample_rate: AtomicU32,
     mode: AtomicU8,
     version: AtomicU32,
+    has_remotes: AtomicBool,
 }
 
 fn make_bins(n: usize) -> Box<[AtomicU32]> {
@@ -75,8 +78,9 @@ impl SpectrumData {
             bins_b: make_bins(n),
             center_freqs: center_freqs.into_boxed_slice(),
             sample_rate: AtomicU32::new(44100.0_f32.to_bits()),
-            mode: AtomicU8::new(MODE_BOTH),
+            mode: AtomicU8::new(MODE_SUM),
             version: AtomicU32::new(0),
+            has_remotes: AtomicBool::new(false),
         }
     }
 
@@ -84,8 +88,13 @@ impl SpectrumData {
         self.center_freqs.len()
     }
 
+    #[allow(dead_code)]
     pub fn center_freq(&self, bin: usize) -> f32 {
         self.center_freqs[bin]
+    }
+
+    pub fn center_freqs_slice(&self) -> &[f32] {
+        &self.center_freqs
     }
 
     pub fn write_bin(&self, index: usize, db: f32) {
@@ -106,6 +115,18 @@ impl SpectrumData {
 
     pub fn set_sample_rate(&self, sr: f32) {
         self.sample_rate.store(sr.to_bits(), Ordering::Relaxed);
+    }
+
+    pub fn sample_rate_bits(&self) -> u32 {
+        self.sample_rate.load(Ordering::Relaxed)
+    }
+
+    pub fn read_bin_bits(&self, index: usize) -> u32 {
+        self.bins_a[index].load(Ordering::Relaxed)
+    }
+
+    pub fn read_bin_b_bits(&self, index: usize) -> u32 {
+        self.bins_b[index].load(Ordering::Relaxed)
     }
 
     pub fn read_all(&self, out: &mut [f32]) {
@@ -130,6 +151,14 @@ impl SpectrumData {
 
     pub fn is_both(&self) -> bool {
         self.mode() == MODE_BOTH
+    }
+
+    pub fn set_has_remotes(&self, v: bool) {
+        self.has_remotes.store(v, Ordering::Relaxed);
+    }
+
+    pub fn has_remotes(&self) -> bool {
+        self.has_remotes.load(Ordering::Relaxed)
     }
 
     pub fn version(&self) -> u32 {
@@ -258,6 +287,7 @@ pub struct AnalyzerCore {
     hop_counter: usize,
     smoothed_a: Vec<f32>,
     smoothed_b: Vec<f32>,
+    shmem_writer: Option<SharedMemoryWriter>,
 }
 
 impl AnalyzerCore {
@@ -276,7 +306,12 @@ impl AnalyzerCore {
             hop_counter: 0,
             smoothed_a: vec![DB_FLOOR; num_bins],
             smoothed_b: vec![DB_FLOOR; num_bins],
+            shmem_writer: None,
         }
+    }
+
+    pub fn set_shmem_writer(&mut self, writer: SharedMemoryWriter) {
+        self.shmem_writer = Some(writer);
     }
 
     pub fn reset(&mut self, sample_rate: f64) {
@@ -307,16 +342,19 @@ impl AnalyzerCore {
                     generate_kernels(&spectrum.center_freqs, sample_rate, fft_size, &fft);
                 let _ = tx.send(KernelData { kernels, fft });
             });
+            self.smoothed_a.fill(DB_FLOOR);
+            self.smoothed_b.fill(DB_FLOOR);
         } else {
-            // Same sample rate — keep existing kernels, just clear buffers.
+            // Same sample rate — keep existing kernels and smoothed state.
+            // Only clear ring buffers (stale audio). Smoothed arrays retain
+            // their values so the display doesn't flash on transport resets
+            // (AU hosts call reset() on play/stop/seek).
             self.ring_left.fill(0.0);
             self.ring_right.fill(0.0);
         }
 
         self.ring_pos = 0;
         self.hop_counter = 0;
-        self.smoothed_a.fill(DB_FLOOR);
-        self.smoothed_b.fill(DB_FLOOR);
     }
 
     /// Block until background kernel generation completes (for tests).
@@ -410,6 +448,10 @@ impl AnalyzerCore {
         }
 
         self.spectrum.bump_version();
+
+        if let Some(ref writer) = self.shmem_writer {
+            writer.update(&self.spectrum);
+        }
     }
 
     pub fn spectrum(&self) -> &Arc<SpectrumData> {
