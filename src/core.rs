@@ -165,7 +165,7 @@ impl SpectrumData {
         self.version.load(Ordering::Relaxed)
     }
 
-    fn bump_version(&self) {
+    pub fn bump_version(&self) {
         self.version.fetch_add(1, Ordering::Relaxed);
     }
 

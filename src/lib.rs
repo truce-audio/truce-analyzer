@@ -862,20 +862,48 @@ mod tests {
         truce_test::assert_no_nans(&result.output);
     }
 
-    fn generate_test_signal(spectrum: &Arc<SpectrumData>) {
+    // Use low sample rate in tests to keep kernel generation fast in debug builds.
+    // At 8kHz: FFT size ~16384 vs ~262144 at 44.1kHz. ~16x faster.
+    const TEST_SR: f64 = 22050.0;
+
+    /// Generate pink noise into a spectrum via CQT.
+    /// Pink noise = equal energy per octave = flat in CQT.
+    /// Uses a Voss-McCartney algorithm (sum of octave-shifted random sources).
+    fn generate_pink_noise(spectrum: &Arc<SpectrumData>) {
         let mut core = AnalyzerCore::new(spectrum.clone());
-        core.reset(44100.0);
+        core.reset(TEST_SR);
         core.wait_for_kernels();
-        let sr = 44100.0f32;
-        let pi2 = 2.0 * std::f32::consts::PI;
-        for i in 0..135_000 {
-            let t = i as f32 / sr;
-            let signal = 0.30 * (pi2 * 100.0 * t).sin()
-                + 0.30 * (pi2 * 440.0 * t).sin()
-                + 0.20 * (pi2 * 1000.0 * t).sin()
-                + 0.10 * (pi2 * 5000.0 * t).sin()
-                + 0.10 * (pi2 * 10000.0 * t).sin();
-            core.process_stereo(signal, signal);
+
+        // Voss-McCartney pink noise: 12 octave rows
+        let mut rng = 0x12345678u32;
+        let mut rows = [0.0f32; 12];
+        let mut running_sum = 0.0f32;
+
+        let xorshift = |state: &mut u32| -> f32 {
+            *state ^= *state << 13;
+            *state ^= *state >> 17;
+            *state ^= *state << 5;
+            (*state as f32 / u32::MAX as f32) * 2.0 - 1.0
+        };
+
+        // Initialize rows
+        for row in &mut rows {
+            *row = xorshift(&mut rng);
+            running_sum += *row;
+        }
+
+        for i in 0..66_000u32 {
+            // Update one row per sample based on trailing zeros of counter
+            let tz = i.trailing_zeros() as usize;
+            if tz < rows.len() {
+                running_sum -= rows[tz];
+                rows[tz] = xorshift(&mut rng);
+                running_sum += rows[tz];
+            }
+            let white = xorshift(&mut rng);
+            let pink = (running_sum + white) / (rows.len() as f32 + 1.0);
+            let sample = pink * 0.5;
+            core.process_stereo(sample, sample);
         }
     }
 
@@ -883,7 +911,7 @@ mod tests {
     fn gui_screenshot() {
         let freqs = cqt_center_frequencies();
         let spectrum = Arc::new(SpectrumData::new(freqs));
-        generate_test_signal(&spectrum);
+        generate_pink_noise(&spectrum);
 
         let instance_id = registry::register(Some("Test"), spectrum.clone());
         let ui_cell = RefCell::new(UiState::new(spectrum, instance_id));
@@ -904,6 +932,60 @@ mod tests {
         );
 
         registry::deregister(instance_id);
+    }
+
+
+    #[test]
+    fn gui_screenshot_diff() {
+        let freqs = cqt_center_frequencies();
+        let num_bins = freqs.len();
+
+        // "Before EQ" — pink noise (flat in CQT)
+        let spec_before = Arc::new(SpectrumData::new(freqs.clone()));
+        generate_pink_noise(&spec_before);
+        let id_before = registry::register(Some("Before EQ"), spec_before.clone());
+
+        // "After EQ" — simulate a warm EQ: boost lows, gentle mid scoop, cut highs
+        let spec_after = Arc::new(SpectrumData::new(freqs));
+        for i in 0..num_bins {
+            let freq = spec_before.center_freqs_slice()[i];
+            let original = spec_before.read_bin(i);
+            // Log-linear tilt: +4 dB at 30 Hz, 0 dB at ~500 Hz, -10 dB at 10 kHz
+            let octaves_from_ref = (freq / 500.0).log2();
+            let eq_db = -3.0 * octaves_from_ref;
+            spec_after.write_bin(i, (original + eq_db).clamp(DB_FLOOR, 0.0));
+        }
+        spec_after.bump_version();
+        let id_after = registry::register(Some("After EQ"), spec_after.clone());
+
+        let ui_cell = RefCell::new({
+            let mut ui = UiState::new(spec_after, id_after);
+            ui.instance_name = "After EQ".to_string();
+            ui.selected_ids.push(id_before);
+            ui.view_mode = ViewMode::Both;
+            ui.spectrum.set_has_remotes(true);
+            ui
+        });
+
+        truce_egui::snapshot::assert_snapshot::<TruceAnalyzerParams>(
+            "screenshots",
+            "analyzer_diff",
+            800,
+            400,
+            2.0,
+            0,
+            Some(truce_gui::font::JETBRAINS_MONO),
+            |ctx, state| {
+                let mut ui = ui_cell.borrow_mut();
+                ui.update_local();
+                ui.update_remotes();
+                ui.update_diff();
+                analyzer_ui(ctx, state, &mut ui);
+            },
+        );
+
+        registry::deregister(id_before);
+        registry::deregister(id_after);
     }
 
     #[test]
