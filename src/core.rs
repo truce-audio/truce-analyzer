@@ -11,7 +11,7 @@ use rustfft::{Fft, FftPlanner};
 // CQT parameters
 // ---------------------------------------------------------------------------
 
-pub const BINS_PER_OCTAVE: usize = 48;
+pub const BINS_PER_OCTAVE: usize = 96;
 pub const CQT_F_MIN: f32 = 27.5; // A0
 pub const CQT_F_MAX: f32 = 20480.0;
 
@@ -20,8 +20,8 @@ pub const DB_CEIL: f32 = 0.0;
 pub const FREQ_MIN: f32 = 20.0; // display range lower bound
 pub const FREQ_MAX: f32 = 20_000.0;
 
-const SMOOTH_UP: f32 = 0.4;
-const SMOOTH_DOWN: f32 = 0.8;
+const SMOOTH_UP: f32 = 0.9;
+const SMOOTH_DOWN: f32 = 0.9;
 const HOP_SIZE: usize = 2048;
 const KERNEL_SPARSITY_THRESHOLD: f32 = 0.001;
 
