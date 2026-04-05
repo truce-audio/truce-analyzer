@@ -11,3 +11,4 @@ crate = "truce-analyzer"
 category = "effect"
 fourcc = "TrAn"
 au_tag = "Effects"
+notarize = true
