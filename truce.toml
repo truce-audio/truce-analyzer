@@ -4,6 +4,9 @@ id = "com.truce"
 url = "https://www.github.com/truce-audio/"
 au_manufacturer = "Truc"
 
+[macos.packaging]
+notarize = true
+
 [[plugin]]
 name = "Truce Analyzer"
 suffix = "truce-analyzer"
@@ -11,4 +14,3 @@ crate = "truce-analyzer"
 category = "effect"
 fourcc = "TrAn"
 au_tag = "Effects"
-notarize = true
