@@ -951,8 +951,13 @@ mod tests {
             let freq = spec_before.center_freqs_slice()[i];
             let original = spec_before.read_bin(i);
             // Log-linear tilt: +4 dB at 30 Hz, 0 dB at ~500 Hz, -10 dB at 10 kHz
-            let octaves_from_ref = (freq / 500.0).log2();
-            let eq_db = -3.0 * octaves_from_ref;
+            // Mid scoop centered at 800 Hz + high shelf boost above 4 kHz.
+            // Two Gaussian-like bells.
+            let scoop = -8.0
+                * (-((freq / 800.0).log2()).powi(2) / (2.0 * 0.6_f32.powi(2))).exp();
+            let high_boost = 6.0
+                * (-((freq / 8000.0).log2()).powi(2) / (2.0 * 0.7_f32.powi(2))).exp();
+            let eq_db = scoop + high_boost;
             spec_after.write_bin(i, (original + eq_db).clamp(DB_FLOOR, 0.0));
         }
         spec_after.bump_version();
