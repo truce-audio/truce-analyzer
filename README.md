@@ -51,12 +51,6 @@ You can select multiple sources to compare against several points in your chain 
 
 Available as CLAP, VST3, VST2, AU, and AAX. Works in any DAW that supports these formats.
 
-Multi-instance comparison works across formats within the same process. Cross-process communication (AU v3, AAX) uses shared memory.
-
 ## License
 
 Licensed under either of [Apache License, Version 2.0](LICENSE-APACHE) or [MIT License](LICENSE-MIT) at your option.
-
-## Building from Source
-
-See [DEVELOPMENT.md](DEVELOPMENT.md).
