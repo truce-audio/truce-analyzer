@@ -1,12 +1,10 @@
 # Truce Analyzer
 
-A real-time frequency spectrum analyzer plugin for music production. Place multiple instances across your signal chain to visually compare and diff the spectral impact of your processing.
-
 **[Download the latest release](https://github.com/truce-audio/truce-analyzer/releases/latest)** — available as CLAP, VST3, VST2, AU, and AAX.
 
-![](screenshots/analyzer_spectrum.png)
+A real-time frequency spectrum analyzer plugin for music production. 
 
-## A/B comparisons made easier with a slight abuse of the plugin system
+![](screenshots/analyzer_spectrum.png)
 
 Compare signals across your chain without needing additional tracks or sends. Insert one instance before your processing and one after, then select the "before" instance as a source in the "after" instance.
 
@@ -21,15 +19,7 @@ Three view modes:
 - **Diff** — show only the difference
 - **Both** — overlay + diff together (shown above)
 
-### Getting Started with A/B
-
-1. Insert Truce Analyzer before your plugin chain
-2. Double-click the instance name and rename it (e.g., "Before EQ")
-3. Insert another Truce Analyzer after your chain
-4. In the second instance, open the **Source** dropdown and select "Before EQ"
-5. The spectral difference appears immediately
-
-You can select multiple sources to compare against several points in your chain at once.
+You can also select multiple sources to compare against several points in your chain at once.
 
 ## Controls
 
