@@ -4,17 +4,11 @@ A real-time frequency spectrum analyzer plugin for music production. Place multi
 
 **[Download the latest release](https://github.com/truce-audio/truce-analyzer/releases/latest)** — available as CLAP, VST3, VST2, AU, and AAX.
 
-![Pink noise spectrum — flat in CQT](screenshots/analyzer_spectrum.png)
+![](screenshots/analyzer_spectrum.png)
 
-## How It Works
+## A/B comparisons made easier with a slight abuse of the plugin system
 
-Truce Analyzer uses a **Constant-Q Transform** — a frequency analysis where every bin has the same fractional bandwidth, matching how we hear pitch. Low frequencies get fine resolution, high frequencies get coarse resolution. The result is a spectrum display where an octave always looks the same width, regardless of register.
-
-The plugin passes audio through unmodified. Insert it anywhere in your chain to see what's happening at that point.
-
-## A/B Comparison
-
-The real power is comparing signals across your chain. Insert one instance before your processing and one after, then select the "before" instance as a source in the "after" instance.
+Compare signals across your chain without needing additional tracks or sends. Insert one instance before your processing and one after, then select the "before" instance as a source in the "after" instance.
 
 ![Before/after EQ comparison showing spectral diff](screenshots/analyzer_diff.png)
 
