@@ -1,8 +1,11 @@
 use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU8, Ordering};
-use std::sync::mpsc;
-use std::sync::Arc;
+use std::sync::{mpsc, Arc};
+use std::thread;
+use std::time::Duration;
 
 use rustfft::num_complex::Complex;
+
+use truce_dsp::AudioTapConsumer;
 
 use crate::shmem::SharedMemoryWriter;
 use rustfft::{Fft, FftPlanner};
@@ -454,9 +457,6 @@ impl AnalyzerCore {
         }
     }
 
-    pub fn spectrum(&self) -> &Arc<SpectrumData> {
-        &self.spectrum
-    }
 }
 
 // ---------------------------------------------------------------------------
@@ -494,4 +494,125 @@ pub fn format_freq(freq: f32) -> String {
     } else {
         format!("{}", freq as u32)
     }
+}
+
+// ---------------------------------------------------------------------------
+// AnalyzerWorker — runs AnalyzerCore on a dedicated thread so the audio
+// thread only has to push samples into an AudioTap.
+// ---------------------------------------------------------------------------
+
+/// Control channel between the audio thread and the analyzer worker.
+///
+/// All fields are atomic; the worker polls them each iteration. `reset`
+/// is communicated by bumping `reset_version` after writing the new
+/// sample rate — the worker calls `AnalyzerCore::reset` when it notices
+/// a version change.
+struct WorkerCtl {
+    sample_rate_bits: AtomicU32,
+    reset_version: AtomicU32,
+    shutdown: AtomicBool,
+}
+
+/// Handle to the background analyzer worker. Dropping the handle
+/// requests shutdown and joins the thread.
+pub struct AnalyzerWorker {
+    ctl: Arc<WorkerCtl>,
+    handle: Option<thread::JoinHandle<()>>,
+}
+
+impl AnalyzerWorker {
+    /// Signal the worker to pick up `sample_rate` and call
+    /// `AnalyzerCore::reset` on its next poll.
+    pub fn reset(&self, sample_rate: f64) {
+        self.ctl
+            .sample_rate_bits
+            .store((sample_rate as f32).to_bits(), Ordering::Relaxed);
+        self.ctl.reset_version.fetch_add(1, Ordering::Release);
+    }
+}
+
+impl Drop for AnalyzerWorker {
+    fn drop(&mut self) {
+        self.ctl.shutdown.store(true, Ordering::Release);
+        if let Some(h) = self.handle.take() {
+            let _ = h.join();
+        }
+    }
+}
+
+/// Spawn the analyzer worker.
+///
+/// The returned handle owns the worker thread. Pushing samples into
+/// `tap_rx`'s paired producer causes the worker to run CQT and write
+/// to the shared [`SpectrumData`]. Shared-memory mirroring is optional
+/// and, if supplied, is moved into the worker so it drops when the
+/// worker thread exits.
+pub fn spawn_analyzer_worker(
+    spectrum: Arc<SpectrumData>,
+    mut tap_rx: AudioTapConsumer,
+    shmem_writer: Option<SharedMemoryWriter>,
+) -> AnalyzerWorker {
+    let ctl = Arc::new(WorkerCtl {
+        sample_rate_bits: AtomicU32::new(0),
+        reset_version: AtomicU32::new(0),
+        shutdown: AtomicBool::new(false),
+    });
+    let ctl_thread = Arc::clone(&ctl);
+
+    let handle = thread::Builder::new()
+        .name("truce-analyzer-worker".into())
+        .spawn(move || {
+            let mut core = AnalyzerCore::new(spectrum);
+            if let Some(writer) = shmem_writer {
+                core.set_shmem_writer(writer);
+            }
+
+            let channels = tap_rx.channels() as usize;
+            debug_assert_eq!(channels, 2, "worker assumes stereo tap");
+
+            // Pull up to this many frames per drain. Bounded so reset
+            // / shutdown checks run at least ~1kHz even under heavy
+            // input backlog.
+            const DRAIN_FRAMES: usize = 2048;
+            let mut scratch = vec![0.0_f32; DRAIN_FRAMES * channels];
+
+            let mut last_reset_version: u32 = 0;
+
+            loop {
+                if ctl_thread.shutdown.load(Ordering::Acquire) {
+                    break;
+                }
+
+                // Pick up any pending reset before draining samples so
+                // the new sample rate applies to subsequent audio.
+                let v = ctl_thread.reset_version.load(Ordering::Acquire);
+                if v != last_reset_version {
+                    last_reset_version = v;
+                    let sr = f32::from_bits(
+                        ctl_thread.sample_rate_bits.load(Ordering::Relaxed),
+                    ) as f64;
+                    if sr > 0.0 {
+                        core.reset(sr);
+                    }
+                }
+
+                let frames = tap_rx.read(&mut scratch, DRAIN_FRAMES);
+                if frames == 0 {
+                    // Nothing to do — sleep briefly. ~4 ms is short
+                    // enough that a 60 Hz UI never sees stale data,
+                    // long enough to avoid spinning the CPU.
+                    thread::sleep(Duration::from_millis(4));
+                    continue;
+                }
+
+                for f in 0..frames {
+                    let l = scratch[f * channels];
+                    let r = scratch[f * channels + 1];
+                    core.process_stereo(l, r);
+                }
+            }
+        })
+        .expect("spawn truce-analyzer-worker");
+
+    AnalyzerWorker { ctl, handle: Some(handle) }
 }

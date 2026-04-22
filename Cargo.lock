@@ -1513,6 +1513,7 @@ dependencies = [
  "truce-au",
  "truce-clap",
  "truce-core",
+ "truce-dsp",
  "truce-egui",
  "truce-gui",
  "truce-test",
@@ -1556,6 +1557,10 @@ dependencies = [
  "syn",
  "toml",
 ]
+
+[[package]]
+name = "truce-dsp"
+version = "0.3.0"
 
 [[package]]
 name = "truce-egui"

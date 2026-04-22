@@ -9,10 +9,11 @@ use truce::prelude::*;
 use truce_egui::{EguiEditor, ParamState};
 
 use crate::core::{
-    cqt_center_frequencies, db_to_y, format_freq, freq_to_x, x_to_freq, AnalyzerCore,
-    SpectrumData, DB_FLOOR, DB_GRID, FREQ_GRID, FREQ_MAX, FREQ_MIN, MODE_BOTH, MODE_DIFF,
-    MODE_LEFT, MODE_RIGHT, MODE_SUM,
+    cqt_center_frequencies, db_to_y, format_freq, freq_to_x, spawn_analyzer_worker, x_to_freq,
+    AnalyzerWorker, SpectrumData, DB_FLOOR, DB_GRID, FREQ_GRID, FREQ_MAX, FREQ_MIN, MODE_BOTH,
+    MODE_DIFF, MODE_LEFT, MODE_RIGHT, MODE_SUM,
 };
+use truce_dsp::{audio_tap, AudioTapProducer};
 use crate::registry::InstanceId;
 use crate::shmem::{FileRegistry, SharedMemoryWriter};
 use crate::ui_state::{PersistentState, UiState, ViewMode};
@@ -59,10 +60,24 @@ use TruceAnalyzerParamsParamId as P;
 
 pub struct TruceAnalyzer {
     params: Arc<TruceAnalyzerParams>,
-    core: AnalyzerCore,
+    /// Shared spectrum atomics: the worker writes, the editor reads.
+    spectrum: Arc<SpectrumData>,
+    /// Audio thread pushes stereo samples here; the worker drains.
+    tap_tx: AudioTapProducer,
+    /// Scratch for one process block's worth of interleaved stereo.
+    /// Pre-sized in `reset()`; `push_block` is the only realtime-safe
+    /// consumer.
+    scratch: Vec<f32>,
+    /// Joined + shut down on drop.
+    worker: AnalyzerWorker,
     instance_id: InstanceId,
     state: PersistentState,
 }
+
+/// Stereo ring capacity. 32768 frames is ~170 ms at 192 kHz and >700 ms
+/// at 44.1 kHz — comfortably more than any realistic worker scheduling
+/// gap, with drop-on-full providing a safety net if the worker stalls.
+const TAP_CAPACITY_FRAMES: usize = 32 * 1024;
 
 impl TruceAnalyzer {
     pub fn new(params: Arc<TruceAnalyzerParams>) -> Self {
@@ -72,19 +87,21 @@ impl TruceAnalyzer {
         let instance_id = registry::register(None, spectrum.clone());
         let instance_name = registry::name_of(instance_id).unwrap_or_default();
 
-        let mut core = AnalyzerCore::new(spectrum);
-        if let Some(writer) =
-            SharedMemoryWriter::create(instance_id.0, &instance_name, core.spectrum().num_bins())
-        {
-            core.set_shmem_writer(writer);
-        }
+        let shmem_writer =
+            SharedMemoryWriter::create(instance_id.0, &instance_name, spectrum.num_bins());
+
+        let (tap_tx, tap_rx) = audio_tap(TAP_CAPACITY_FRAMES, 2);
+        let worker = spawn_analyzer_worker(spectrum.clone(), tap_rx, shmem_writer);
 
         let mut file_reg = FileRegistry::load();
         file_reg.add(instance_id.0, &instance_name);
 
         Self {
             params,
-            core,
+            spectrum,
+            tap_tx,
+            scratch: Vec::new(),
+            worker,
             instance_id,
             state: PersistentState {
                 instance_name,
@@ -103,9 +120,15 @@ impl Drop for TruceAnalyzer {
 }
 
 impl PluginLogic for TruceAnalyzer {
-    fn reset(&mut self, sr: f64, _bs: usize) {
+    fn reset(&mut self, sr: f64, bs: usize) {
         self.params.set_sample_rate(sr);
-        self.core.reset(sr);
+        // Size the push scratch to one block of interleaved stereo. A
+        // one-block margin lets us push the entire process() block in
+        // a single `push_block` call and keeps `Vec::clear` cheap.
+        if self.scratch.capacity() < bs * 2 {
+            self.scratch = Vec::with_capacity(bs * 2);
+        }
+        self.worker.reset(sr);
     }
 
     fn process(
@@ -118,13 +141,17 @@ impl PluginLogic for TruceAnalyzer {
         if channels == 0 {
             return ProcessStatus::Normal;
         }
-        let mode = if self.core.spectrum().has_remotes() {
+        // The worker reads `mode()` itself; the audio thread only needs
+        // to update the shared value in response to param / remote
+        // changes.
+        let mode = if self.spectrum.has_remotes() {
             MODE_SUM
         } else {
             self.params.channel.value().as_mode_u8()
         };
-        self.core.spectrum().set_mode(mode);
+        self.spectrum.set_mode(mode);
 
+        self.scratch.clear();
         for i in 0..buffer.num_samples() {
             let gain = db_to_linear(self.params.gain.smoothed_next() as f64) as f32;
 
@@ -143,7 +170,20 @@ impl PluginLogic for TruceAnalyzer {
                 right = left;
             }
 
-            self.core.process_stereo(left, right);
+            // Realtime-safe: `scratch` was sized to `bs * 2` in reset,
+            // so `push` here never reallocates under normal host block
+            // sizes. If a host exceeds the last-reset block size we
+            // flush early rather than allocate.
+            if self.scratch.len() + 2 > self.scratch.capacity() {
+                let _ = self.tap_tx.push_block(&self.scratch, 2);
+                self.scratch.clear();
+            }
+            self.scratch.push(left);
+            self.scratch.push(right);
+        }
+        if !self.scratch.is_empty() {
+            let _ = self.tap_tx.push_block(&self.scratch, 2);
+            self.scratch.clear();
         }
         ProcessStatus::Normal
     }
@@ -162,7 +202,7 @@ impl PluginLogic for TruceAnalyzer {
     }
 
     fn custom_editor(&self) -> Option<Box<dyn truce_core::editor::Editor>> {
-        let spectrum = self.core.spectrum().clone();
+        let spectrum = self.spectrum.clone();
         let instance_id = self.instance_id;
 
         Some(Box::new(

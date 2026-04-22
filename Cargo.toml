@@ -20,6 +20,7 @@ truce = { git = "https://github.com/truce-audio/truce" }
 truce-gui = { git = "https://github.com/truce-audio/truce" }
 truce-egui = { git = "https://github.com/truce-audio/truce" }
 truce-core = { git = "https://github.com/truce-audio/truce" }
+truce-dsp = { git = "https://github.com/truce-audio/truce" }
 truce-clap = { git = "https://github.com/truce-audio/truce", optional = true }
 truce-vst3 = { git = "https://github.com/truce-audio/truce", optional = true }
 truce-vst2 = { git = "https://github.com/truce-audio/truce", optional = true }
@@ -43,6 +44,7 @@ truce       = { path = "../truce/crates/truce" }
 truce-gui   = { path = "../truce/crates/truce-gui" }
 truce-egui  = { path = "../truce/crates/truce-egui" }
 truce-core  = { path = "../truce/crates/truce-core" }
+truce-dsp   = { path = "../truce/crates/truce-dsp" }
 truce-clap  = { path = "../truce/crates/truce-clap" }
 truce-vst3  = { path = "../truce/crates/truce-vst3" }
 truce-vst2  = { path = "../truce/crates/truce-vst2" }
