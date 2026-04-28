@@ -6,14 +6,20 @@ edition = "2021"
 [lib]
 crate-type = ["cdylib", "rlib"]
 
+[[bin]]
+name = "truce-analyzer-standalone"
+path = "src/main.rs"
+required-features = ["standalone"]
+
 [features]
-default = ["clap", "vst3", "vst2", "au", "aax"]
+default = ["clap", "vst3", "vst2", "au", "aax", "standalone"]
 clap = ["dep:truce-clap", "dep:clap-sys"]
 vst3 = ["dep:truce-vst3"]
 vst2 = ["dep:truce-vst2"]
 au = ["dep:truce-au"]
 aax = ["dep:truce-aax"]
-dev = ["truce/dev"]
+hot-reload = ["truce/hot-reload"]
+standalone = ["dep:truce-standalone", "truce-standalone/gui"]
 
 [dependencies]
 truce = { git = "https://github.com/truce-audio/truce" }
@@ -26,6 +32,7 @@ truce-vst3 = { git = "https://github.com/truce-audio/truce", optional = true }
 truce-vst2 = { git = "https://github.com/truce-audio/truce", optional = true }
 truce-au = { git = "https://github.com/truce-audio/truce", optional = true }
 truce-aax = { git = "https://github.com/truce-audio/truce", optional = true }
+truce-standalone = { git = "https://github.com/truce-audio/truce", optional = true }
 clap-sys = { version = "0.5", optional = true }
 egui = "0.31"
 rustfft = "6"
