@@ -894,12 +894,25 @@ fn draw_hover(
 mod tests {
     use super::*;
     use crate::core::{cqt_center_frequencies, AnalyzerCore, SpectrumData};
-    use std::cell::RefCell;
+    use truce::prelude::Editor;
 
     #[test]
     fn builds_and_runs() {
         let result = truce_test::render_effect::<Plugin>(512, 44100.0);
         truce_test::assert_no_nans(&result.output);
+    }
+
+    /// Build a headless `EguiEditor` wrapping a pre-populated `UiState` and
+    /// drive `Editor::screenshot()` to grab the rendered pixels. The Editor
+    /// trait's `screenshot()` is the public entry point; the prior
+    /// closure-based `truce_egui::snapshot::assert_snapshot` was removed in
+    /// the v0.17 screenshot-API redesign.
+    fn capture_editor_pixels(editor_ui: AnalyzerEditorUi) -> (Vec<u8>, u32, u32) {
+        let mut editor = EguiEditor::with_ui((800, 400), editor_ui)
+            .with_visuals(truce_egui::theme::dark())
+            .with_font(truce_gui::font::JETBRAINS_MONO);
+        let params: Arc<dyn truce::params::Params> = Arc::new(TruceAnalyzerParams::new());
+        Editor::screenshot(&mut editor, params).expect("editor returned no screenshot pixels")
     }
 
     // Use low sample rate in tests to keep kernel generation fast in debug builds.
@@ -954,21 +967,18 @@ mod tests {
         generate_pink_noise(&spectrum);
 
         let instance_id = registry::register(Some("Test"), spectrum.clone());
-        let ui_cell = RefCell::new(UiState::new(spectrum, instance_id));
+        let editor_ui = AnalyzerEditorUi {
+            ui: UiState::new(spectrum, instance_id),
+        };
 
-        truce_egui::snapshot::assert_snapshot::<TruceAnalyzerParams>(
-            "screenshots",
+        let (pixels, w, h) = capture_editor_pixels(editor_ui);
+        truce_test::assert_screenshot_pixels(
             "analyzer_spectrum",
-            800,
-            400,
-            2.0,
+            &pixels,
+            w,
+            h,
             0,
-            Some(truce_gui::font::JETBRAINS_MONO),
-            |ctx, state| {
-                let mut ui = ui_cell.borrow_mut();
-                ui.update_local();
-                analyzer_ui(ctx, state, &mut ui);
-            },
+            "screenshots",
         );
 
         registry::deregister(instance_id);
@@ -1003,30 +1013,25 @@ mod tests {
         spec_after.bump_version();
         let id_after = registry::register(Some("After EQ"), spec_after.clone());
 
-        let ui_cell = RefCell::new({
-            let mut ui = UiState::new(spec_after, id_after);
-            ui.instance_name = "After EQ".to_string();
-            ui.selected_ids.push(id_before);
-            ui.view_mode = ViewMode::Both;
-            ui.spectrum.set_has_remotes(true);
-            ui
-        });
-
-        truce_egui::snapshot::assert_snapshot::<TruceAnalyzerParams>(
-            "screenshots",
-            "analyzer_diff",
-            800,
-            400,
-            2.0,
-            0,
-            Some(truce_gui::font::JETBRAINS_MONO),
-            |ctx, state| {
-                let mut ui = ui_cell.borrow_mut();
-                ui.update_local();
-                ui.update_remotes();
-                ui.update_diff();
-                analyzer_ui(ctx, state, &mut ui);
+        let editor_ui = AnalyzerEditorUi {
+            ui: {
+                let mut ui = UiState::new(spec_after, id_after);
+                ui.instance_name = "After EQ".to_string();
+                ui.selected_ids.push(id_before);
+                ui.view_mode = ViewMode::Both;
+                ui.spectrum.set_has_remotes(true);
+                ui
             },
+        };
+
+        let (pixels, w, h) = capture_editor_pixels(editor_ui);
+        truce_test::assert_screenshot_pixels(
+            "analyzer_diff",
+            &pixels,
+            w,
+            h,
+            0,
+            "screenshots",
         );
 
         registry::deregister(id_before);
