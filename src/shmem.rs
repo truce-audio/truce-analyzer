@@ -1,9 +1,9 @@
-use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU32, Ordering};
 
 use truce_core::cast::len_u32;
 
-use crate::core::{SpectrumData, BINS_PER_OCTAVE, CQT_F_MIN};
+use crate::core::{BINS_PER_OCTAVE, CQT_F_MIN, SpectrumData};
 
 // ---------------------------------------------------------------------------
 // SpectrumSource — read-only interface for local or remote spectrum data
@@ -107,7 +107,7 @@ impl SharedMemoryWriter {
             writer.write_u32(8, len_u32(num_bins));
             writer.write_u32(16, 0); // mode
             writer.write_u32(20, 0); // data_version
-                                     // Write name
+            // Write name
             let name_bytes = name.as_bytes();
             let name_len = name_bytes.len().min(SHM_NAME_MAX);
             writer.write_u32(24, len_u32(name_len));

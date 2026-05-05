@@ -7,13 +7,13 @@ use std::sync::Arc;
 
 use truce::prelude::*;
 use truce_core::cast::{discrete_norm, len_u32, sample_f32};
-use truce_dsp::{audio_tap, AudioTapProducer};
+use truce_dsp::{AudioTapProducer, audio_tap};
 use truce_egui::EguiEditor;
 
 use crate::core::{
-    cqt_center_frequencies, db_to_y, format_freq, freq_to_x, spawn_analyzer_worker, x_to_freq,
-    AnalyzerWorker, SpectrumData, DB_FLOOR, DB_GRID, FREQ_GRID, FREQ_MAX, FREQ_MIN, MODE_BOTH,
-    MODE_DIFF, MODE_LEFT, MODE_RIGHT, MODE_SUM,
+    AnalyzerWorker, DB_FLOOR, DB_GRID, FREQ_GRID, FREQ_MAX, FREQ_MIN, MODE_BOTH, MODE_DIFF,
+    MODE_LEFT, MODE_RIGHT, MODE_SUM, SpectrumData, cqt_center_frequencies, db_to_y, format_freq,
+    freq_to_x, spawn_analyzer_worker, x_to_freq,
 };
 use crate::registry::InstanceId;
 use crate::shmem::{FileRegistry, SharedMemoryWriter};
@@ -916,10 +916,10 @@ mod tests {
     use truce::prelude::Editor;
     use truce_core::screenshot::{load_png, save_png};
     use truce_test::assertions::assert_no_nans;
-    use truce_test::{driver, InputSource};
+    use truce_test::{InputSource, driver};
 
     use super::*;
-    use crate::core::{cqt_center_frequencies, AnalyzerCore, SpectrumData};
+    use crate::core::{AnalyzerCore, SpectrumData, cqt_center_frequencies};
 
     #[test]
     fn builds_and_runs() {

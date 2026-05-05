@@ -4,10 +4,10 @@ use serde::{Deserialize, Serialize};
 use truce::core::custom_state::State as StateTrait;
 use truce::prelude::PluginContext;
 
-use crate::core::{SpectrumData, DB_FLOOR};
+use crate::TruceAnalyzerParams;
+use crate::core::{DB_FLOOR, SpectrumData};
 use crate::registry::{self, InstanceId};
 use crate::shmem::{self, SpectrumSource};
-use crate::TruceAnalyzerParams;
 
 // ---------------------------------------------------------------------------
 // View mode
