@@ -4,11 +4,11 @@
 
 A real-time frequency spectrum analyzer plugin for debugging/reverse-engineering audio plugins. 
 
-![](screenshots/analyzer_spectrum.png)
+![](screenshots/analyzer_spectrum_macos.png)
 
 Compare signals across your chain without needing additional tracks or sends. Insert one instance before your processing and one after, then select the "before" instance as a source in the "after" instance.
 
-![Before/after EQ comparison showing spectral diff](screenshots/analyzer_diff.png)
+![Before/after EQ comparison showing spectral diff](screenshots/analyzer_diff_macos.png)
 
 - **Red** = boost (your processing added energy)
 - **Green** = cut (your processing removed energy)
