@@ -6,14 +6,15 @@ mod ui_state;
 use std::sync::Arc;
 
 use truce::prelude::*;
-use truce_egui::{EguiEditor, ParamState};
+use truce_core::cast::{discrete_norm, len_u32, sample_f32};
+use truce_dsp::{audio_tap, AudioTapProducer};
+use truce_egui::EguiEditor;
 
 use crate::core::{
     cqt_center_frequencies, db_to_y, format_freq, freq_to_x, spawn_analyzer_worker, x_to_freq,
     AnalyzerWorker, SpectrumData, DB_FLOOR, DB_GRID, FREQ_GRID, FREQ_MAX, FREQ_MIN, MODE_BOTH,
     MODE_DIFF, MODE_LEFT, MODE_RIGHT, MODE_SUM,
 };
-use truce_dsp::{audio_tap, AudioTapProducer};
 use crate::registry::InstanceId;
 use crate::shmem::{FileRegistry, SharedMemoryWriter};
 use crate::ui_state::{PersistentState, UiState, ViewMode};
@@ -45,7 +46,12 @@ impl ChannelMode {
 
 #[derive(Params)]
 pub struct TruceAnalyzerParams {
-    #[param(name = "Gain", range = "linear(-60, 6)", unit = "dB", smooth = "exp(5)")]
+    #[param(
+        name = "Gain",
+        range = "linear(-60, 6)",
+        unit = "dB",
+        smooth = "exp(5)"
+    )]
     pub gain: FloatParam,
 
     #[param(name = "Channel")]
@@ -153,13 +159,13 @@ impl PluginLogic for TruceAnalyzer {
 
         self.scratch.clear();
         for i in 0..buffer.num_samples() {
-            let gain = db_to_linear(self.params.gain.smoothed_next() as f64) as f32;
+            let gain = db_to_linear(self.params.gain.smoothed_next_f64());
 
             let mut left = 0.0f32;
             let mut right = 0.0f32;
             for ch in 0..channels {
                 let (inp, out) = buffer.io(ch);
-                out[i] = inp[i] * gain;
+                out[i] = sample_f32(f64::from(inp[i]) * gain);
                 match ch {
                     0 => left = out[i],
                     1 => right = out[i],
@@ -189,11 +195,11 @@ impl PluginLogic for TruceAnalyzer {
     }
 
     fn save_state(&self) -> Vec<u8> {
-        self.state.serialize()
+        StateTrait::serialize(&self.state)
     }
 
     fn load_state(&mut self, data: &[u8]) {
-        if let Some(ps) = PersistentState::deserialize(data) {
+        if let Some(ps) = <PersistentState as StateTrait>::deserialize(data) {
             if !ps.instance_name.is_empty() {
                 registry::rename(self.instance_id, &ps.instance_name);
             }
@@ -207,6 +213,7 @@ impl PluginLogic for TruceAnalyzer {
 
         Some(Box::new(
             EguiEditor::with_ui(
+                self.params.clone(),
                 (800, 400),
                 AnalyzerEditorUi {
                     ui: UiState::new(spectrum, instance_id),
@@ -226,19 +233,19 @@ struct AnalyzerEditorUi {
     ui: UiState,
 }
 
-impl truce_egui::EditorUi for AnalyzerEditorUi {
-    fn ui(&mut self, ctx: &egui::Context, state: &ParamState) {
+impl truce_egui::EditorUi<TruceAnalyzerParams> for AnalyzerEditorUi {
+    fn ui(&mut self, ctx: &egui::Context, state: &PluginContext<TruceAnalyzerParams>) {
         self.ui.update_local();
         self.ui.update_remotes();
         self.ui.update_diff();
         analyzer_ui(ctx, state, &mut self.ui);
     }
 
-    fn opened(&mut self, state: &ParamState) {
+    fn opened(&mut self, state: &PluginContext<TruceAnalyzerParams>) {
         self.ui.apply_state(state);
     }
 
-    fn state_changed(&mut self, state: &ParamState) {
+    fn state_changed(&mut self, state: &PluginContext<TruceAnalyzerParams>) {
         self.ui.apply_state(state);
     }
 }
@@ -293,7 +300,11 @@ const GHOST_PALETTE: &[(egui::Color32, egui::Color32)] = &[
     ),
 ];
 
-fn analyzer_ui(ctx: &egui::Context, state: &ParamState, ui_state: &mut UiState) {
+fn analyzer_ui(
+    ctx: &egui::Context,
+    state: &PluginContext<TruceAnalyzerParams>,
+    ui_state: &mut UiState,
+) {
     draw_header(ctx, state, ui_state);
     draw_central(ctx, ui_state);
     ctx.request_repaint_after(std::time::Duration::from_millis(33));
@@ -303,7 +314,15 @@ fn analyzer_ui(ctx: &egui::Context, state: &ParamState, ui_state: &mut UiState) 
 // Header
 // ---------------------------------------------------------------------------
 
-fn draw_header(ctx: &egui::Context, state: &ParamState, ui_state: &mut UiState) {
+#[allow(
+    clippy::too_many_lines,
+    reason = "header is a single visual concern; splitting fragments the egui layout flow"
+)]
+fn draw_header(
+    ctx: &egui::Context,
+    state: &PluginContext<TruceAnalyzerParams>,
+    ui_state: &mut UiState,
+) {
     egui::TopBottomPanel::top("header")
         .exact_height(30.0)
         .frame(egui::Frame::NONE.fill(theme::HEADER_BG))
@@ -346,17 +365,17 @@ fn draw_header(ctx: &egui::Context, state: &ParamState, ui_state: &mut UiState) 
                     // Channel (hidden when comparison sources are selected)
                     let channel_id: u32 = P::Channel.into();
                     if ui_state.selected_ids.is_empty() {
-                        let current_ch = state.format(channel_id);
+                        let current_ch = state.format_param(channel_id);
                         let ch_options = ["Sum", "Both", "Left", "Right", "Diff"];
                         egui::ComboBox::from_id_salt("channel_mode")
                             .selected_text(current_ch)
                             .width(55.0)
                             .show_ui(ui, |ui| {
                                 for (i, &label) in ch_options.iter().enumerate() {
-                                    let norm = i as f64 / (ch_options.len() - 1) as f64;
-                                    let sel = (state.get(channel_id) - norm).abs() < 0.01;
+                                    let norm = discrete_norm(i, ch_options.len());
+                                    let sel = (state.get_param(channel_id) - norm).abs() < 0.01;
                                     if ui.selectable_label(sel, label).clicked() {
-                                        state.set_immediate(channel_id, norm);
+                                        state.automate(channel_id, norm);
                                     }
                                 }
                             });
@@ -490,16 +509,7 @@ fn draw_central(ctx: &egui::Context, ui_state: &UiState) {
                     );
                 }
                 ViewMode::Diff => {
-                    if !ui_state.remotes.is_empty() {
-                        for remote in &ui_state.remotes {
-                            draw_diff_spectrum(
-                                &painter,
-                                center_freqs,
-                                &remote.diff_bins,
-                                spec,
-                            );
-                        }
-                    } else {
+                    if ui_state.remotes.is_empty() {
                         draw_spectrum(
                             &painter,
                             center_freqs,
@@ -508,6 +518,10 @@ fn draw_central(ctx: &egui::Context, ui_state: &UiState) {
                             STROKE_L,
                             FILL_L,
                         );
+                    } else {
+                        for remote in &ui_state.remotes {
+                            draw_diff_spectrum(&painter, center_freqs, &remote.diff_bins, spec);
+                        }
                     }
                 }
                 ViewMode::Both => {
@@ -524,12 +538,7 @@ fn draw_central(ctx: &egui::Context, ui_state: &UiState) {
                         FILL_L,
                     );
                     for remote in &ui_state.remotes {
-                        draw_diff_spectrum(
-                            &painter,
-                            center_freqs,
-                            &remote.diff_bins,
-                            spec,
-                        );
+                        draw_diff_spectrum(&painter, center_freqs, &remote.diff_bins, spec);
                     }
                 }
             }
@@ -573,6 +582,10 @@ fn draw_grid(painter: &egui::Painter, rect: egui::Rect) {
 // Spectrum curve (filled mesh + stroke)
 // ---------------------------------------------------------------------------
 
+#[allow(
+    clippy::cast_possible_truncation,
+    reason = "px is a screen-space x coordinate; rect width fits in i32"
+)]
 fn draw_spectrum(
     painter: &egui::Painter,
     center_freqs: &[f32],
@@ -586,7 +599,7 @@ fn draw_spectrum(
     let mut last_px = -1i32;
     for (i, &db) in bins.iter().enumerate().take(center_freqs.len()) {
         let freq = center_freqs[i];
-        if freq < FREQ_MIN || freq > FREQ_MAX {
+        if !(FREQ_MIN..=FREQ_MAX).contains(&freq) {
             continue;
         }
         let x = freq_to_x(freq, rect.left(), rect.width());
@@ -608,7 +621,7 @@ fn draw_spectrum(
         mesh.colored_vertex(point, fill_color);
         mesh.colored_vertex(egui::pos2(point.x, rect.bottom()), fill_color);
         if idx > 0 {
-            let i = (idx * 2) as u32;
+            let i = len_u32(idx * 2);
             mesh.add_triangle(i - 2, i - 1, i);
             mesh.add_triangle(i - 1, i + 1, i);
         }
@@ -625,6 +638,10 @@ fn draw_spectrum(
 // Diff spectrum
 // ---------------------------------------------------------------------------
 
+#[allow(
+    clippy::cast_possible_truncation,
+    reason = "px is a screen-space x coordinate; rect width fits in i32"
+)]
 fn draw_diff_spectrum(
     painter: &egui::Painter,
     center_freqs: &[f32],
@@ -649,7 +666,7 @@ fn draw_diff_spectrum(
 
     for i in 0..n {
         let freq = center_freqs[i];
-        if freq < FREQ_MIN || freq > FREQ_MAX {
+        if !(FREQ_MIN..=FREQ_MAX).contains(&freq) {
             continue;
         }
         let x = freq_to_x(freq, rect.left(), rect.width());
@@ -678,7 +695,7 @@ fn draw_diff_spectrum(
         mesh.colored_vertex(point, color);
         mesh.colored_vertex(egui::pos2(point.x, center_y), color);
         if idx > 0 {
-            let i = (idx * 2) as u32;
+            let i = len_u32(idx * 2);
             mesh.add_triangle(i - 2, i - 1, i);
             mesh.add_triangle(i - 1, i + 1, i);
         }
@@ -748,8 +765,7 @@ fn draw_legend(painter: &egui::Painter, ui_state: &UiState, spec: egui::Rect) {
     if matches!(ui_state.view_mode, ViewMode::Normal | ViewMode::Both) {
         for (idx, remote) in ui_state.remotes.iter().enumerate() {
             let (stroke, _) = GHOST_PALETTE[idx % GHOST_PALETTE.len()];
-            let name =
-                registry::name_of(remote.id).unwrap_or_else(|| format!("#{}", remote.id.0));
+            let name = registry::name_of(remote.id).unwrap_or_else(|| format!("#{}", remote.id.0));
             painter.rect_filled(
                 egui::Rect::from_min_size(egui::pos2(x, y + 2.0), egui::vec2(swatch_w, 8.0)),
                 0.0,
@@ -771,6 +787,10 @@ fn draw_legend(painter: &egui::Painter, ui_state: &UiState, spec: egui::Rect) {
 // Axis labels
 // ---------------------------------------------------------------------------
 
+#[allow(
+    clippy::cast_possible_truncation,
+    reason = "DB_GRID values are small finite integers; f32 -> i32 is exact"
+)]
 fn draw_labels(painter: &egui::Painter, spec: egui::Rect) {
     let font = egui::FontId::monospace(10.0);
 
@@ -801,12 +821,11 @@ fn draw_labels(painter: &egui::Painter, spec: egui::Rect) {
 // Hover crosshair + readout
 // ---------------------------------------------------------------------------
 
-fn draw_hover(
-    painter: &egui::Painter,
-    pos: egui::Pos2,
-    ui_state: &UiState,
-    rect: egui::Rect,
-) {
+#[allow(
+    clippy::cast_precision_loss,
+    reason = "lines.len() is a small visible-line count that fits in f32 mantissa"
+)]
+fn draw_hover(painter: &egui::Painter, pos: egui::Pos2, ui_state: &UiState, rect: egui::Rect) {
     let crosshair = egui::Color32::from_white_alpha(40);
     painter.line_segment(
         [
@@ -831,16 +850,16 @@ fn draw_hover(
     let freq_str = if freq >= 1000.0 {
         format!("{:.1} kHz", freq / 1000.0)
     } else {
-        format!("{:.0} Hz", freq)
+        format!("{freq:.0} Hz")
     };
 
     let mut lines: Vec<String> = vec![freq_str];
 
     if ui_state.spectrum.is_both() && ui_state.view_mode == ViewMode::Normal {
         let db_b = ui_state.bins_b[bin];
-        lines.push(format!("L {:.1} dB  R {:.1} dB", db_local, db_b));
+        lines.push(format!("L {db_local:.1} dB  R {db_b:.1} dB"));
     } else {
-        lines.push(format!("{}: {:.1} dB", ui_state.instance_name, db_local));
+        lines.push(format!("{}: {db_local:.1} dB", ui_state.instance_name));
     }
 
     for remote in &ui_state.remotes {
@@ -848,9 +867,9 @@ fn draw_hover(
         let db = remote.bins.get(bin).copied().unwrap_or(DB_FLOOR);
         if matches!(ui_state.view_mode, ViewMode::Diff | ViewMode::Both) {
             let diff = remote.diff_bins.get(bin).copied().unwrap_or(0.0);
-            lines.push(format!("{}: {:.1} dB  \u{0394} {:+.1} dB", name, db, diff));
+            lines.push(format!("{name}: {db:.1} dB  \u{0394} {diff:+.1} dB"));
         } else {
-            lines.push(format!("{}: {:.1} dB", name, db));
+            lines.push(format!("{name}: {db:.1} dB"));
         }
     }
 
@@ -892,27 +911,113 @@ fn draw_hover(
 
 #[cfg(test)]
 mod tests {
+    use std::time::Duration;
+
+    use truce::prelude::Editor;
+    use truce_core::screenshot::{load_png, save_png};
+    use truce_test::assertions::assert_no_nans;
+    use truce_test::{driver, InputSource};
+
     use super::*;
     use crate::core::{cqt_center_frequencies, AnalyzerCore, SpectrumData};
-    use truce::prelude::Editor;
 
     #[test]
     fn builds_and_runs() {
-        let result = truce_test::render_effect::<Plugin>(512, 44100.0);
-        truce_test::assert_no_nans(&result.output);
+        let result = driver!(Plugin)
+            .duration(Duration::from_millis(50))
+            .input(InputSource::Constant(0.5))
+            .run();
+        assert_no_nans(&result);
     }
 
     /// Build a headless `EguiEditor` wrapping a pre-populated `UiState` and
-    /// drive `Editor::screenshot()` to grab the rendered pixels. The Editor
-    /// trait's `screenshot()` is the public entry point; the prior
-    /// closure-based `truce_egui::snapshot::assert_snapshot` was removed in
-    /// the v0.17 screenshot-API redesign.
+    /// drive `Editor::screenshot()` to grab the rendered pixels.
     fn capture_editor_pixels(editor_ui: AnalyzerEditorUi) -> (Vec<u8>, u32, u32) {
-        let mut editor = EguiEditor::with_ui((800, 400), editor_ui)
+        let params = Arc::new(TruceAnalyzerParams::new());
+        let mut editor = EguiEditor::with_ui(params.clone(), (800, 400), editor_ui)
             .with_visuals(truce_egui::theme::dark())
             .with_font(truce_gui::font::JETBRAINS_MONO);
-        let params: Arc<dyn truce::params::Params> = Arc::new(TruceAnalyzerParams::new());
-        Editor::screenshot(&mut editor, params).expect("editor returned no screenshot pixels")
+        let dyn_params: Arc<dyn truce::params::Params> = params;
+        Editor::screenshot(&mut editor, dyn_params).expect("editor returned no screenshot pixels")
+    }
+
+    /// Per-channel "different enough to count" threshold. Sub-perceptual
+    /// AA wobble across egui / wgpu rasterizers (and across CI / dev
+    /// machines) lands well below this; real visual regressions blow past.
+    const SCREENSHOT_PIXEL_THRESHOLD: u8 = 8;
+
+    /// Max pixels allowed to exceed `SCREENSHOT_PIXEL_THRESHOLD`. A 1600×800
+    /// frame holds 1.28M pixels — 0.05% leaves room for rasterizer drift
+    /// without hiding meaningful visual changes.
+    const SCREENSHOT_TOLERANCE_PIXELS: usize = 800;
+
+    /// Compare freshly-rendered RGBA pixels against a reference PNG under
+    /// `<crate>/screenshots/<name>.png`. On mismatch (or missing baseline)
+    /// drop the failing render alongside the reference and panic with the
+    /// `cp` command to promote it.
+    fn assert_pixels_match_ref(name: &str, pixels: &[u8], width: u32, height: u32) {
+        let manifest_dir = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        let ref_path = manifest_dir.join("screenshots").join(format!("{name}.png"));
+        let render_path = manifest_dir
+            .join("target/screenshots")
+            .join(format!("{name}.png"));
+
+        if let Some(parent) = render_path.parent() {
+            let _ = std::fs::create_dir_all(parent);
+        }
+
+        if !ref_path.exists() {
+            save_png(&render_path, pixels, width, height);
+            panic!(
+                "no screenshot baseline at {}. Rendered to {}. Promote with:\n  cp '{}' '{}'",
+                ref_path.display(),
+                render_path.display(),
+                render_path.display(),
+                ref_path.display(),
+            );
+        }
+
+        let (ref_pixels, ref_w, ref_h) = load_png(&ref_path);
+        if (width, height) != (ref_w, ref_h) {
+            save_png(&render_path, pixels, width, height);
+            panic!(
+                "screenshot size changed for {name}: reference {ref_w}x{ref_h}, current {width}x{height}. \
+                 Regenerate with:\n  cp '{}' '{}'",
+                render_path.display(),
+                ref_path.display(),
+            );
+        }
+
+        let mut diff_count = 0usize;
+        let mut max_delta: u8 = 0;
+        for (cur, refp) in pixels.chunks_exact(4).zip(ref_pixels.chunks_exact(4)) {
+            let delta = cur
+                .iter()
+                .zip(refp.iter())
+                .map(|(c, r)| c.abs_diff(*r))
+                .max()
+                .unwrap_or(0);
+            if delta > SCREENSHOT_PIXEL_THRESHOLD {
+                diff_count += 1;
+            }
+            if delta > max_delta {
+                max_delta = delta;
+            }
+        }
+
+        if diff_count > SCREENSHOT_TOLERANCE_PIXELS {
+            save_png(&render_path, pixels, width, height);
+            panic!(
+                "screenshot mismatch for {name}: {diff_count} pixels differ above threshold \
+                 {SCREENSHOT_PIXEL_THRESHOLD} (max allowed: {SCREENSHOT_TOLERANCE_PIXELS}; \
+                 largest channel delta seen: {max_delta}).\nReference: {}\nCurrent:   {}\n\
+                 Promote the new render with:\n  cp '{}' '{}'",
+                ref_path.display(),
+                render_path.display(),
+                render_path.display(),
+                ref_path.display(),
+            );
+        }
     }
 
     // Use low sample rate in tests to keep kernel generation fast in debug builds.
@@ -922,13 +1027,17 @@ mod tests {
     /// Generate pink noise into a spectrum via CQT.
     /// Pink noise = equal energy per octave = flat in CQT.
     /// Uses a Voss-McCartney algorithm (sum of octave-shifted random sources).
+    #[allow(
+        clippy::cast_precision_loss,
+        reason = "rows.len() is the constant 12, well within f32 precision"
+    )]
     fn generate_pink_noise(spectrum: &Arc<SpectrumData>) {
         let mut core = AnalyzerCore::new(spectrum.clone());
         core.reset(TEST_SR);
         core.wait_for_kernels();
 
         // Voss-McCartney pink noise: 12 octave rows
-        let mut rng = 0x12345678u32;
+        let mut rng = 0x1234_5678_u32;
         let mut rows = [0.0f32; 12];
         let mut running_sum = 0.0f32;
 
@@ -936,7 +1045,14 @@ mod tests {
             *state ^= *state << 13;
             *state ^= *state >> 17;
             *state ^= *state << 5;
-            (*state as f32 / u32::MAX as f32) * 2.0 - 1.0
+            // Map a 32-bit RNG output to f32 in [-1, 1]; the precision loss
+            // in u32 -> f32 is the desired noise-floor floor.
+            #[allow(
+                clippy::cast_precision_loss,
+                reason = "noise value's low bits don't matter for the audible signal"
+            )]
+            let v = (*state as f32 / u32::MAX as f32) * 2.0 - 1.0;
+            v
         };
 
         // Initialize rows
@@ -972,18 +1088,10 @@ mod tests {
         };
 
         let (pixels, w, h) = capture_editor_pixels(editor_ui);
-        truce_test::assert_screenshot_pixels(
-            "analyzer_spectrum",
-            &pixels,
-            w,
-            h,
-            0,
-            "screenshots",
-        );
+        assert_pixels_match_ref("analyzer_spectrum", &pixels, w, h);
 
         registry::deregister(instance_id);
     }
-
 
     #[test]
     fn gui_screenshot_diff() {
@@ -1003,10 +1111,9 @@ mod tests {
             // Log-linear tilt: +4 dB at 30 Hz, 0 dB at ~500 Hz, -10 dB at 10 kHz
             // Mid scoop centered at 800 Hz + high shelf boost above 4 kHz.
             // Two Gaussian-like bells.
-            let scoop = -8.0
-                * (-((freq / 800.0).log2()).powi(2) / (2.0 * 0.6_f32.powi(2))).exp();
-            let high_boost = 6.0
-                * (-((freq / 8000.0).log2()).powi(2) / (2.0 * 0.7_f32.powi(2))).exp();
+            let scoop = -8.0 * (-((freq / 800.0).log2()).powi(2) / (2.0 * 0.6_f32.powi(2))).exp();
+            let high_boost =
+                6.0 * (-((freq / 8000.0).log2()).powi(2) / (2.0 * 0.7_f32.powi(2))).exp();
             let eq_db = scoop + high_boost;
             spec_after.write_bin(i, (original + eq_db).clamp(DB_FLOOR, 0.0));
         }
@@ -1025,14 +1132,7 @@ mod tests {
         };
 
         let (pixels, w, h) = capture_editor_pixels(editor_ui);
-        truce_test::assert_screenshot_pixels(
-            "analyzer_diff",
-            &pixels,
-            w,
-            h,
-            0,
-            "screenshots",
-        );
+        assert_pixels_match_ref("analyzer_diff", &pixels, w, h);
 
         registry::deregister(id_before);
         registry::deregister(id_after);

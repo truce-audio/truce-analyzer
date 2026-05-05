@@ -1,0 +1,62 @@
+name: CI
+
+# Validation pipeline — runs on every push to `main` and every PR.
+# Catches build breakage, lint regressions, and test failures before
+# they reach a release tag.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: 0
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: ${{ matrix.label }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - label: macOS (arm64)
+            runner: macos-14
+          - label: Windows (x86_64)
+            runner: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@1.88
+        with:
+          components: clippy, rustfmt
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.runner }}-ci
+
+      - name: clippy (pedantic)
+        run: cargo clippy --all-features --all-targets -- -D warnings
+
+      # Release mode keeps CQT kernel generation fast enough for the
+      # screenshot tests (debug is ~16x slower at 22.05 kHz).
+      - name: test
+        run: cargo test --release --all-features
+
+      - name: upload failing screenshots
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: failing-screenshots-${{ matrix.runner }}
+          path: target/screenshots/
+          if-no-files-found: ignore
+          retention-days: 14

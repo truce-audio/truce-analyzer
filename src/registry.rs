@@ -23,9 +23,7 @@ pub fn register(name: Option<&str>, spectrum: Arc<SpectrumData>) -> InstanceId {
     let mut reg = REGISTRY.lock().unwrap();
     reg.next_id += 1;
     let id = reg.next_id;
-    let name = name
-        .map(String::from)
-        .unwrap_or_else(|| format!("Analyzer {id}"));
+    let name = name.map_or_else(|| format!("Analyzer {id}"), String::from);
     reg.instances.insert(id, InstanceEntry { name, spectrum });
     InstanceId(id)
 }

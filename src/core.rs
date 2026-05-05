@@ -4,11 +4,11 @@ use std::thread;
 use std::time::Duration;
 
 use rustfft::num_complex::Complex;
-
+use rustfft::{Fft, FftPlanner};
+use truce_core::cast::{param_f32, sample_count_usize, sample_f32};
 use truce_dsp::AudioTapConsumer;
 
 use crate::shmem::SharedMemoryWriter;
-use rustfft::{Fft, FftPlanner};
 
 // ---------------------------------------------------------------------------
 // CQT parameters
@@ -39,6 +39,15 @@ pub const MODE_RIGHT: u8 = 3;
 pub const MODE_DIFF: u8 = 4;
 
 /// Compute center frequencies for all CQT bins.
+///
+/// `BINS_PER_OCTAVE * num_octaves` is bounded by the audible-range
+/// configuration (≲ 1k bins), so the f32 ↔ usize round trip is exact.
+#[allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_precision_loss,
+    clippy::cast_sign_loss,
+    reason = "CQT bin count is bounded by audible-range config; f32 / usize round-trip is exact"
+)]
 pub fn cqt_center_frequencies() -> Vec<f32> {
     let num_octaves = (CQT_F_MAX / CQT_F_MIN).log2();
     let num_bins = (BINS_PER_OCTAVE as f32 * num_octaves).ceil() as usize;
@@ -48,6 +57,10 @@ pub fn cqt_center_frequencies() -> Vec<f32> {
 }
 
 /// The constant Q factor for the configured bins-per-octave.
+#[allow(
+    clippy::cast_precision_loss,
+    reason = "BINS_PER_OCTAVE is the small const 96; fits in f64 mantissa exactly"
+)]
 fn q_factor() -> f64 {
     1.0 / (2.0_f64.powf(1.0 / BINS_PER_OCTAVE as f64) - 1.0)
 }
@@ -173,6 +186,15 @@ impl SpectrumData {
     }
 
     /// Find the CQT bin nearest to a given frequency (O(1) for log-spaced bins).
+    ///
+    /// `k` is non-negative (we early-out when `freq <= CQT_F_MIN`) and
+    /// bounded by `num_bins`, so the round/cast pair is lossless.
+    #[allow(
+        clippy::cast_possible_truncation,
+        clippy::cast_precision_loss,
+        clippy::cast_sign_loss,
+        reason = "k is in [0, num_bins) by the early-return guard"
+    )]
     pub fn nearest_bin(&self, freq: f32) -> usize {
         if freq <= CQT_F_MIN {
             return 0;
@@ -195,6 +217,14 @@ struct SparseKernel {
 /// Uses the Brown-Puckette method: each time-domain kernel is a Hann-windowed
 /// complex exponential at the bin's center frequency, FFT'd and sparsified.
 /// At runtime a single signal FFT + sparse dot products yields all CQT bins.
+///
+/// `n` and `window_len` are both bounded by `fft_size` (≤ 2²⁰), well
+/// within `f64`'s 52-bit mantissa, so the int → float casts inside
+/// the inner loop are exact.
+#[allow(
+    clippy::cast_precision_loss,
+    reason = "kernel time index n stays within the FFT window length"
+)]
 fn generate_kernels(
     center_freqs: &[f32],
     sample_rate: f64,
@@ -209,8 +239,7 @@ fn generate_kernels(
     center_freqs
         .iter()
         .map(|&freq| {
-            let window_len = (q * sample_rate / freq as f64).ceil() as usize;
-            let window_len = window_len.min(fft_size);
+            let window_len = sample_count_usize(q * sample_rate / f64::from(freq)).min(fft_size);
             let inv_n = 1.0 / window_len as f64;
 
             // Time-domain kernel, right-aligned so it analyses the most recent
@@ -219,10 +248,10 @@ fn generate_kernels(
             let offset = fft_size - window_len;
             for n in 0..window_len {
                 let hann = 0.5 * (1.0 - (pi2 * n as f64 * inv_n).cos());
-                let phase = -pi2 * freq as f64 * n as f64 / sample_rate;
+                let phase = -pi2 * f64::from(freq) * n as f64 / sample_rate;
                 kernel[offset + n] = Complex::new(
-                    (hann * phase.cos() * inv_n) as f32,
-                    (hann * phase.sin() * inv_n) as f32,
+                    sample_f32(hann * phase.cos() * inv_n),
+                    sample_f32(hann * phase.sin() * inv_n),
                 );
             }
 
@@ -244,6 +273,10 @@ fn generate_kernels(
 }
 
 /// Apply sparse CQT dot products to an already-FFT'd signal buffer.
+#[allow(
+    clippy::cast_precision_loss,
+    reason = "fft_size is bounded by audible sample-rate / CQT_F_MIN; well within f32 precision"
+)]
 fn apply_cqt(
     signal: &[Complex<f32>],
     kernels: &[SparseKernel],
@@ -318,13 +351,20 @@ impl AnalyzerCore {
     }
 
     pub fn reset(&mut self, sample_rate: f64) {
-        self.spectrum.set_sample_rate(sample_rate as f32);
+        self.spectrum.set_sample_rate(param_f32(sample_rate));
 
         let q = q_factor();
-        let max_window = (q * sample_rate / CQT_F_MIN as f64).ceil() as usize;
+        let max_window = sample_count_usize(q * sample_rate / f64::from(CQT_F_MIN));
         let new_fft_size = max_window.next_power_of_two();
 
-        if new_fft_size != self.fft_size {
+        if new_fft_size == self.fft_size {
+            // Same sample rate — keep existing kernels and smoothed state.
+            // Only clear ring buffers (stale audio). Smoothed arrays retain
+            // their values so the display doesn't flash on transport resets
+            // (AU hosts call reset() on play/stop/seek).
+            self.ring_left.fill(0.0);
+            self.ring_right.fill(0.0);
+        } else {
             // Sample rate changed — reallocate buffers, generate kernels on
             // a background thread so neither init nor audio thread blocks.
             self.fft_size = new_fft_size;
@@ -341,19 +381,11 @@ impl AnalyzerCore {
             std::thread::spawn(move || {
                 let mut planner = FftPlanner::new();
                 let fft = planner.plan_fft_forward(fft_size);
-                let kernels =
-                    generate_kernels(&spectrum.center_freqs, sample_rate, fft_size, &fft);
+                let kernels = generate_kernels(&spectrum.center_freqs, sample_rate, fft_size, &fft);
                 let _ = tx.send(KernelData { kernels, fft });
             });
             self.smoothed_a.fill(DB_FLOOR);
             self.smoothed_b.fill(DB_FLOOR);
-        } else {
-            // Same sample rate — keep existing kernels and smoothed state.
-            // Only clear ring buffers (stale audio). Smoothed arrays retain
-            // their values so the display doesn't flash on transport resets
-            // (AU hosts call reset() on play/stop/seek).
-            self.ring_left.fill(0.0);
-            self.ring_right.fill(0.0);
         }
 
         self.ring_pos = 0;
@@ -456,7 +488,6 @@ impl AnalyzerCore {
             writer.update(&self.spectrum);
         }
     }
-
 }
 
 // ---------------------------------------------------------------------------
@@ -488,6 +519,14 @@ pub const FREQ_GRID: &[f32] = &[
 
 pub const DB_GRID: &[f32] = &[0.0, -12.0, -24.0, -36.0, -48.0, -60.0, -72.0, -84.0];
 
+/// Display label for a grid frequency. Inputs come from `FREQ_GRID`,
+/// which is a fixed positive-finite ladder, so the f32 → u32 truncation
+/// is intentional and never lossy.
+#[allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    reason = "FREQ_GRID values are positive integers below u32::MAX"
+)]
 pub fn format_freq(freq: f32) -> String {
     if freq >= 1000.0 {
         format!("{}k", (freq / 1000.0) as u32)
@@ -526,7 +565,7 @@ impl AnalyzerWorker {
     pub fn reset(&self, sample_rate: f64) {
         self.ctl
             .sample_rate_bits
-            .store((sample_rate as f32).to_bits(), Ordering::Relaxed);
+            .store(param_f32(sample_rate).to_bits(), Ordering::Relaxed);
         self.ctl.reset_version.fetch_add(1, Ordering::Release);
     }
 }
@@ -539,6 +578,11 @@ impl Drop for AnalyzerWorker {
         }
     }
 }
+
+/// Pull up to this many frames per drain in `spawn_analyzer_worker`.
+/// Bounded so reset / shutdown checks run at least ~1kHz even under
+/// heavy input backlog.
+const DRAIN_FRAMES: usize = 2048;
 
 /// Spawn the analyzer worker.
 ///
@@ -570,10 +614,6 @@ pub fn spawn_analyzer_worker(
             let channels = tap_rx.channels() as usize;
             debug_assert_eq!(channels, 2, "worker assumes stereo tap");
 
-            // Pull up to this many frames per drain. Bounded so reset
-            // / shutdown checks run at least ~1kHz even under heavy
-            // input backlog.
-            const DRAIN_FRAMES: usize = 2048;
             let mut scratch = vec![0.0_f32; DRAIN_FRAMES * channels];
 
             let mut last_reset_version: u32 = 0;
@@ -588,9 +628,9 @@ pub fn spawn_analyzer_worker(
                 let v = ctl_thread.reset_version.load(Ordering::Acquire);
                 if v != last_reset_version {
                     last_reset_version = v;
-                    let sr = f32::from_bits(
+                    let sr = f64::from(f32::from_bits(
                         ctl_thread.sample_rate_bits.load(Ordering::Relaxed),
-                    ) as f64;
+                    ));
                     if sr > 0.0 {
                         core.reset(sr);
                     }
@@ -614,5 +654,8 @@ pub fn spawn_analyzer_worker(
         })
         .expect("spawn truce-analyzer-worker");
 
-    AnalyzerWorker { ctl, handle: Some(handle) }
+    AnalyzerWorker {
+        ctl,
+        handle: Some(handle),
+    }
 }

@@ -1,10 +1,13 @@
 use std::sync::Arc;
 
-use truce_egui::ParamState;
+use serde::{Deserialize, Serialize};
+use truce::core::custom_state::State as StateTrait;
+use truce::prelude::PluginContext;
 
 use crate::core::{SpectrumData, DB_FLOOR};
 use crate::registry::{self, InstanceId};
 use crate::shmem::{self, SpectrumSource};
+use crate::TruceAnalyzerParams;
 
 // ---------------------------------------------------------------------------
 // View mode
@@ -42,16 +45,26 @@ pub struct RemoteCache {
 }
 
 // ---------------------------------------------------------------------------
-// Persistent state (serialized via #[derive(State)])
+// Persistent state — serialized as JSON to keep wire-format simple and
+// stable across truce upgrades. The truce v0.35.0 `#[derive(State)]`
+// macro emits a `usize + u32` mismatch that prevents using it here.
 // ---------------------------------------------------------------------------
 
-use truce::prelude::*;
-
-#[derive(State, Default, Clone)]
+#[derive(Serialize, Deserialize, Default, Clone)]
 pub struct PersistentState {
     pub instance_name: String,
     pub selected_remote_names: Vec<String>,
     pub view_mode: u8,
+}
+
+impl StateTrait for PersistentState {
+    fn serialize(&self) -> Vec<u8> {
+        serde_json::to_vec(self).unwrap_or_default()
+    }
+
+    fn deserialize(data: &[u8]) -> Option<Self> {
+        serde_json::from_slice(data).ok()
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -79,10 +92,7 @@ pub struct UiState {
 }
 
 impl UiState {
-    pub fn new(
-        spectrum: Arc<SpectrumData>,
-        instance_id: InstanceId,
-    ) -> Self {
+    pub fn new(spectrum: Arc<SpectrumData>, instance_id: InstanceId) -> Self {
         let num_bins = spectrum.num_bins();
         let instance_name = registry::name_of(instance_id).unwrap_or_default();
 
@@ -100,13 +110,13 @@ impl UiState {
         }
     }
 
-    /// Apply state from the plugin (called on open and on state_changed).
-    pub fn apply_state(&mut self, state: &ParamState) {
+    /// Apply state from the plugin (called on open and on `state_changed`).
+    pub fn apply_state(&mut self, state: &PluginContext<TruceAnalyzerParams>) {
         let data = state.get_state();
         if data.is_empty() {
             return;
         }
-        let Some(ps) = PersistentState::deserialize(&data) else {
+        let Some(ps) = <PersistentState as StateTrait>::deserialize(&data) else {
             return;
         };
         if !ps.instance_name.is_empty() && !self.editing_name {
@@ -118,14 +128,12 @@ impl UiState {
             .iter()
             .filter_map(|name| registry::find_by_name(name))
             .collect();
-        self.spectrum
-            .set_has_remotes(!self.selected_ids.is_empty());
+        self.spectrum.set_has_remotes(!self.selected_ids.is_empty());
     }
 
     /// Write current UI state back to the plugin.
-    pub fn sync_to_plugin(&self, state: &ParamState) {
-        self.spectrum
-            .set_has_remotes(!self.selected_ids.is_empty());
+    pub fn sync_to_plugin(&self, state: &PluginContext<TruceAnalyzerParams>) {
+        self.spectrum.set_has_remotes(!self.selected_ids.is_empty());
         let ps = PersistentState {
             instance_name: self.instance_name.clone(),
             selected_remote_names: self
@@ -135,7 +143,7 @@ impl UiState {
                 .collect(),
             view_mode: self.view_mode as u8,
         };
-        state.set_state(ps.serialize());
+        state.set_state(StateTrait::serialize(&ps));
     }
 
     /// Read local spectrum if version changed.
@@ -161,8 +169,7 @@ impl UiState {
             let source: Option<Arc<dyn SpectrumSource>> = registry::get(id)
                 .map(|s| s as Arc<dyn SpectrumSource>)
                 .or_else(|| {
-                    shmem::open_shared_spectrum(id.0)
-                        .map(|s| s as Arc<dyn SpectrumSource>)
+                    shmem::open_shared_spectrum(id.0).map(|s| s as Arc<dyn SpectrumSource>)
                 });
             if let Some(spectrum) = source {
                 let num_bins = spectrum.num_bins();
@@ -196,7 +203,11 @@ impl UiState {
             {
                 remote.diff_local_version = local_v;
                 remote.diff_remote_version = remote.last_version;
-                let n = self.bins_a.len().min(remote.bins.len()).min(remote.diff_bins.len());
+                let n = self
+                    .bins_a
+                    .len()
+                    .min(remote.bins.len())
+                    .min(remote.diff_bins.len());
                 for i in 0..n {
                     remote.diff_bins[i] = self.bins_a[i] - remote.bins[i];
                 }
@@ -205,7 +216,7 @@ impl UiState {
     }
 
     /// Toggle a remote source on/off.
-    pub fn toggle_source(&mut self, id: InstanceId, state: &ParamState) {
+    pub fn toggle_source(&mut self, id: InstanceId, state: &PluginContext<TruceAnalyzerParams>) {
         if let Some(pos) = self.selected_ids.iter().position(|&x| x == id) {
             self.selected_ids.remove(pos);
         } else {
@@ -215,7 +226,7 @@ impl UiState {
     }
 
     /// Change view mode.
-    pub fn set_view_mode(&mut self, mode: ViewMode, state: &ParamState) {
+    pub fn set_view_mode(&mut self, mode: ViewMode, state: &PluginContext<TruceAnalyzerParams>) {
         self.view_mode = mode;
         self.sync_to_plugin(state);
     }
