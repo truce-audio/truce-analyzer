@@ -3,8 +3,8 @@
 #
 # Tags HEAD as v<package-version> (read from Cargo.toml), builds the
 # signed `.pkg` installer, and creates / updates the matching GitHub
-# release. Run this first; then run `scripts/release-windows.ps1` on
-# a Windows machine to attach the matching `.exe`.
+# release. Run this first; then run `scripts/release-windows.sh` from
+# WSL on a Windows machine to attach the matching `.exe`.
 #
 # Requires: gh, cargo, and an authenticated GitHub CLI session. The
 # script installs / upgrades cargo-truce to the tag pinned by
@@ -113,7 +113,7 @@ trap 'rm -f "$notes_file"' EXIT
     echo "## Installers"
     echo
     echo "- macOS: \`$(basename "$pkg_path")\`"
-    echo "- Windows: attached separately via \`scripts/release-windows.ps1\`"
+    echo "- Windows: attached separately via \`scripts/release-windows.sh\` (WSL)"
 } > "$notes_file"
 
 # Optional extras — attach screenshots if the per-OS bake has run.
@@ -134,6 +134,6 @@ fi
 
 echo
 echo "==> macOS release done."
-echo "    Next, on a Windows machine:"
+echo "    Next, on a Windows machine (inside WSL):"
 echo "      git fetch --tags origin"
-echo "      powershell -ExecutionPolicy Bypass -File scripts/release-windows.ps1"
+echo "      ./scripts/release-windows.sh"
