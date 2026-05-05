@@ -951,25 +951,55 @@ mod tests {
     /// without hiding meaningful visual changes.
     const SCREENSHOT_TOLERANCE_PIXELS: usize = 800;
 
+    /// Per-OS suffix on the reference PNG filename. Each runner gates
+    /// against pixels rasterized on its own egui / wgpu / fontconfig
+    /// stack — cross-platform pixel parity isn't achievable with the
+    /// `pixel_threshold` budget. Mirrors the convention truce uses for
+    /// its example crates.
+    const OS_SUFFIX: &str = if cfg!(target_os = "macos") {
+        "macos"
+    } else if cfg!(target_os = "windows") {
+        "windows"
+    } else if cfg!(target_os = "linux") {
+        "linux"
+    } else {
+        "unknown"
+    };
+
     /// Compare freshly-rendered RGBA pixels against a reference PNG under
-    /// `<crate>/screenshots/<name>.png`. On mismatch (or missing baseline)
-    /// drop the failing render alongside the reference and panic with the
-    /// `cp` command to promote it.
+    /// `<crate>/screenshots/<name>_<os>.png`. On mismatch (or missing
+    /// baseline) drop the failing render alongside the reference and
+    /// panic with the `cp` command to promote it.
+    ///
+    /// When `BAKE_SCREENSHOTS=1` is set in the environment, the helper
+    /// writes the current render directly to the reference path and
+    /// passes — used by the `bake-screenshots.yml` workflow to refresh
+    /// per-OS baselines. The same env-driven shape lets a developer
+    /// re-bake locally with `BAKE_SCREENSHOTS=1 cargo test --release`.
     fn assert_pixels_match_ref(name: &str, pixels: &[u8], width: u32, height: u32) {
         let manifest_dir = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-        let ref_path = manifest_dir.join("screenshots").join(format!("{name}.png"));
-        let render_path = manifest_dir
-            .join("target/screenshots")
-            .join(format!("{name}.png"));
+        let ref_name = format!("{name}_{OS_SUFFIX}.png");
+        let ref_path = manifest_dir.join("screenshots").join(&ref_name);
+        let render_path = manifest_dir.join("target/screenshots").join(&ref_name);
 
+        if let Some(parent) = ref_path.parent() {
+            let _ = std::fs::create_dir_all(parent);
+        }
         if let Some(parent) = render_path.parent() {
             let _ = std::fs::create_dir_all(parent);
+        }
+
+        if std::env::var_os("BAKE_SCREENSHOTS").is_some() {
+            save_png(&ref_path, pixels, width, height);
+            eprintln!("[bake] wrote {}", ref_path.display());
+            return;
         }
 
         if !ref_path.exists() {
             save_png(&render_path, pixels, width, height);
             panic!(
-                "no screenshot baseline at {}. Rendered to {}. Promote with:\n  cp '{}' '{}'",
+                "no screenshot baseline at {}. Rendered to {}. Promote with:\n  cp '{}' '{}'\n\
+                 Or run the `Bake screenshots` workflow on this branch.",
                 ref_path.display(),
                 render_path.display(),
                 render_path.display(),

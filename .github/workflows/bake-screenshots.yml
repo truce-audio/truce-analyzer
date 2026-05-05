@@ -1,0 +1,86 @@
+name: Bake screenshots
+
+# Manually-triggered re-bake of the analyzer's reference PNGs on the
+# same hosts that gate them in CI. Solves the "regenerated locally,
+# CI still drifts" problem: dev machines can't match the GitHub
+# runner's exact wgpu / fontconfig stack, so cross-machine rasterizer
+# drift produces sub-perceptual pixel diffs that the in-test
+# `pixel_threshold` won't always absorb. Run this workflow, download
+# the artifact, replace `screenshots/*.png`, commit. Drift only
+# re-appears if GHA upgrades the runner image.
+#
+# Also runs on every PR so reviewers can grab the just-rendered PNGs
+# as an artifact — handy for intentional GUI changes (preview the new
+# look) and for regen after a failing screenshot test (the dev
+# downloads the artifact, replaces the references, commits). The
+# artifact is produced regardless of test pass/fail; gating still
+# happens via `cargo test` in `ci.yml`.
+
+on:
+  workflow_dispatch:
+    inputs:
+      platforms:
+        description: "Platforms to bake (any combination of macos,windows)"
+        type: string
+        default: "macos,windows"
+        required: false
+  pull_request:
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: 0
+  # `BAKE_SCREENSHOTS` toggles `assert_pixels_match_ref` from compare
+  # mode to write-the-reference mode. The screenshot tests still run
+  # under `cargo test`, so they exercise the full editor render path —
+  # they just promote instead of asserting.
+  BAKE_SCREENSHOTS: "1"
+
+jobs:
+  macos:
+    if: github.event_name != 'workflow_dispatch' || contains(inputs.platforms, 'macos')
+    name: bake (macos-14)
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@1.88
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: bake-macos-14
+
+      - name: Bake screenshots
+        run: cargo test --release --all-features --lib -- tests::gui_screenshot
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: baked-screenshots-macos
+          path: screenshots/*_macos.png
+          if-no-files-found: error
+          retention-days: 30
+
+  windows:
+    if: github.event_name != 'workflow_dispatch' || contains(inputs.platforms, 'windows')
+    name: bake (windows-latest)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@1.88
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: bake-windows-latest
+
+      - name: Bake screenshots
+        run: cargo test --release --all-features --lib -- tests::gui_screenshot
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: baked-screenshots-windows
+          path: screenshots/*_windows.png
+          if-no-files-found: error
+          retention-days: 30

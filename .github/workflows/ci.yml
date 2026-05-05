@@ -30,8 +30,12 @@ jobs:
         include:
           - label: macOS (arm64)
             runner: macos-14
+            os: macos
+            installer_glob: target/dist/*.pkg
           - label: Windows (x86_64)
             runner: windows-latest
+            os: windows
+            installer_glob: target/dist/*.exe
 
     steps:
       - uses: actions/checkout@v4
@@ -59,4 +63,28 @@ jobs:
           name: failing-screenshots-${{ matrix.runner }}
           path: target/screenshots/
           if-no-files-found: ignore
+          retention-days: 14
+
+      # Validate that the installer-build path stays green on every
+      # commit, and hand reviewers a downloadable installer for smoke
+      # tests on real DAWs. Pinned to the same truce release the plugin
+      # links against so the bundle layout matches the build artifacts.
+      # No signing here — `--no-notarize` skips the Apple step entirely
+      # and macOS produces an unsigned `.pkg`. Signed + notarized
+      # installers come from `release.yml` on tag push.
+      - name: install cargo-truce
+        run: cargo install cargo-truce --git https://github.com/truce-audio/truce --tag v0.35.1 --locked
+
+      - name: package installer
+        run: cargo truce package --no-notarize
+
+      - name: list installer artifacts
+        shell: bash
+        run: ls -la target/dist/ || true
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: installer-${{ matrix.os }}
+          path: ${{ matrix.installer_glob }}
+          if-no-files-found: error
           retention-days: 14
