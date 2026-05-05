@@ -914,7 +914,7 @@ mod tests {
     use std::time::Duration;
 
     use truce::prelude::Editor;
-    use truce_core::screenshot::{load_png, save_png};
+    use truce_core::screenshot::{DEFAULT_SCREENSHOT_SCALE, load_png, save_png};
     use truce_test::assertions::assert_no_nans;
     use truce_test::{InputSource, driver};
 
@@ -931,12 +931,19 @@ mod tests {
     }
 
     /// Build a headless `EguiEditor` wrapping a pre-populated `UiState` and
-    /// drive `Editor::screenshot()` to grab the rendered pixels.
+    /// drive `Editor::screenshot()` to grab the rendered pixels. Pins the
+    /// editor's content scale to `DEFAULT_SCREENSHOT_SCALE` (2.0) so the
+    /// rendered output stays at the same physical resolution regardless of
+    /// the host's reported display DPI — virtualized GHA runners report 1.0,
+    /// Retina dev machines report 2.0, and we want one baseline per OS.
+    /// Mirrors the contract `truce_core::screenshot::render_pixels_for_at_scale`
+    /// applies for `cargo truce screenshot`.
     fn capture_editor_pixels(editor_ui: AnalyzerEditorUi) -> (Vec<u8>, u32, u32) {
         let params = Arc::new(TruceAnalyzerParams::new());
         let mut editor = EguiEditor::with_ui(params.clone(), (800, 400), editor_ui)
             .with_visuals(truce_egui::theme::dark())
             .with_font(truce_gui::font::JETBRAINS_MONO);
+        editor.set_scale_factor(DEFAULT_SCREENSHOT_SCALE);
         let dyn_params: Arc<dyn truce::params::Params> = params;
         Editor::screenshot(&mut editor, dyn_params).expect("editor returned no screenshot pixels")
     }

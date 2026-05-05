@@ -56,7 +56,12 @@ impl SpectrumSource for SpectrumData {
 // Shared memory layout constants
 // ---------------------------------------------------------------------------
 
+// Only consumed by the Unix create / open paths; gating matches the rest
+// of the platform-specific surface so Windows builds don't trip
+// `dead_code`.
+#[cfg(unix)]
 const SHM_MAGIC: u32 = 0x5441_5A52; // "TAZR"
+#[cfg(unix)]
 const SHM_VERSION: u32 = 1;
 const SHM_NAME_MAX: usize = 64;
 
@@ -78,6 +83,7 @@ fn shm_name_for_id(id: u32) -> String {
 
 pub struct SharedMemoryWriter {
     ptr: *mut u8,
+    #[cfg(unix)]
     size: usize,
     num_bins: usize,
     #[cfg(unix)]
