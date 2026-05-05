@@ -170,6 +170,6 @@ jobs:
           files: |
             dist/macos-installer/*.pkg
             dist/windows-installer/*.exe
-            screenshots/analyzer_spectrum.png
-            screenshots/analyzer_diff.png
+            screenshots/analyzer_spectrum_*.png
+            screenshots/analyzer_diff_*.png
           fail_on_unmatched_files: true
