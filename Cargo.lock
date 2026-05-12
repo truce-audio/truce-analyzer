@@ -58,7 +58,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ed7572b7ba83a31e20d1b48970ee402d2e3e0537dcfe0a3ff4d6eb7508617d43"
 dependencies = [
  "alsa-sys",
- "bitflags 2.11.0",
+ "bitflags 2.11.1",
  "cfg-if",
  "libc",
 ]
@@ -118,7 +118,7 @@ checksum = "c08606f8c3cbf4ce6ec8e28fb0014a2c086708fe954eaa885384a6165172e7e8"
 [[package]]
 name = "baseview"
 version = "0.1.0"
-source = "git+https://github.com/truce-audio/baseview.git#c46647d5d3ffa2048de6788935f618abfaef77cf"
+source = "git+https://github.com/truce-audio/baseview.git#0feb597c775ddf600b1e456b88ad47c18068039e"
 dependencies = [
  "cocoa",
  "core-foundation 0.9.4",
@@ -128,7 +128,7 @@ dependencies = [
  "raw-window-handle 0.5.2",
  "uuid",
  "winapi",
- "x11",
+ "x11-dl",
  "x11rb",
 ]
 
@@ -138,14 +138,14 @@ version = "0.72.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "993776b509cfb49c750f11b8f07a46fa23e0a1386ffc01fb1e7d343efc387895"
 dependencies = [
- "bitflags 2.11.0",
+ "bitflags 2.11.1",
  "cexpr",
  "clang-sys",
  "itertools",
  "proc-macro2",
  "quote",
  "regex",
- "rustc-hash 2.1.1",
+ "rustc-hash 2.1.2",
  "shlex",
  "syn",
 ]
@@ -173,9 +173,9 @@ checksum = "bef38d45163c2f1dde094a7dfd33ccf595c92905c8f8f4fdc18d06fb1037718a"
 
 [[package]]
 name = "bitflags"
-version = "2.11.0"
+version = "2.11.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "843867be96c8daad0d758b57df9392b6d8d271134fce549de6ce169ff98a92af"
+checksum = "c4512299f36f043ab09a583e57bceb5a5aab7a73db1805848e8fef3c9e8c78b3"
 dependencies = [
  "serde_core",
 ]
@@ -229,9 +229,9 @@ checksum = "1e748733b7cbc798e1434b6ac524f0c1ff2ab456fe201501e6497c8417a4fc33"
 
 [[package]]
 name = "cc"
-version = "1.2.58"
+version = "1.2.62"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e1e928d4b69e3077709075a938a05ffbedfa53a84c8f766efbf8220bb1ff60e1"
+checksum = "a1dce859f0832a7d088c4f1119888ab94ef4b5d6795d1ce05afb7fe159d79f98"
 dependencies = [
  "find-msvc-tools",
  "jobserver",
@@ -504,7 +504,7 @@ version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1e0e367e4e7da84520dedcac1901e4da967309406d1e51017ae1abfb97adbd38"
 dependencies = [
- "bitflags 2.11.0",
+ "bitflags 2.11.1",
  "block2",
  "libc",
  "objc2",
@@ -536,7 +536,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "25dd34cec49ab55d85ebf70139cb1ccd29c977ef6b6ba4fe85489d6877ee9ef3"
 dependencies = [
  "ahash",
- "bitflags 2.11.0",
+ "bitflags 2.11.1",
  "emath",
  "epaint",
  "nohash-hasher",
@@ -815,7 +815,7 @@ version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fbcd2dba93594b227a1f57ee09b8b9da8892c34d55aa332e034a228d0fe6a171"
 dependencies = [
- "bitflags 2.11.0",
+ "bitflags 2.11.1",
  "gpu-alloc-types",
 ]
 
@@ -825,7 +825,7 @@ version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "98ff03b468aa837d70984d55f5d3f846f6ec31fe34bbb97c4f85219caeee1ca4"
 dependencies = [
- "bitflags 2.11.0",
+ "bitflags 2.11.1",
 ]
 
 [[package]]
@@ -846,7 +846,7 @@ version = "0.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b89c83349105e3732062a895becfc71a8f921bb71ecbbdd8ff99263e3b53a0ca"
 dependencies = [
- "bitflags 2.11.0",
+ "bitflags 2.11.1",
  "gpu-descriptor-types",
  "hashbrown 0.15.5",
 ]
@@ -857,7 +857,7 @@ version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fdf242682df893b86f33a73828fb09ca4b2d3bb6cc95249707fc684d27484b91"
 dependencies = [
- "bitflags 2.11.0",
+ "bitflags 2.11.1",
 ]
 
 [[package]]
@@ -873,9 +873,9 @@ dependencies = [
 
 [[package]]
 name = "hashbrown"
-version = "0.16.1"
+version = "0.17.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "841d1cc9bed7f9236f321df977030373f4a4163ae1a7dbfe1a51a2c1a51d9100"
+checksum = "ed5909b6e89a2db4456e54cd5f673791d7eca6732202bbf2a9cc504fe2f9b84a"
 
 [[package]]
 name = "heck"
@@ -891,12 +891,12 @@ checksum = "dfa686283ad6dd069f105e5ab091b04c62850d3e4cf5d67debad1933f55023df"
 
 [[package]]
 name = "indexmap"
-version = "2.13.0"
+version = "2.14.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7714e70437a7dc3ac8eb7e6f8df75fd8eb422675fc7678aff7364301092b1017"
+checksum = "d466e9454f08e4a911e14806c24e16fba1b4c121d1ea474396f396069cf949d9"
 dependencies = [
  "equivalent",
- "hashbrown 0.16.1",
+ "hashbrown 0.17.1",
 ]
 
 [[package]]
@@ -970,9 +970,9 @@ dependencies = [
 
 [[package]]
 name = "js-sys"
-version = "0.3.92"
+version = "0.3.98"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cc4c90f45aa2e6eacbe8645f77fdea542ac97a494bcd117a67df9ff4d611f995"
+checksum = "67df7112613f8bfd9150013a0314e196f4800d3201ae742489d999db2f979f08"
 dependencies = [
  "cfg-if",
  "futures-util",
@@ -1010,9 +1010,9 @@ checksum = "e2db585e1d738fc771bf08a151420d3ed193d9d895a36df7f6f8a9456b911ddc"
 
 [[package]]
 name = "libc"
-version = "0.2.183"
+version = "0.2.186"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b5b646652bf6661599e1da8901b3b9522896f01e736bad5f723fe7a3a27f899d"
+checksum = "68ab91017fe16c622486840e4c83c9a37afeff978bd239b5293d61ece587de66"
 
 [[package]]
 name = "libloading"
@@ -1147,7 +1147,7 @@ version = "0.31.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f569fb946490b5743ad69813cb19629130ce9374034abe31614a36402d18f99e"
 dependencies = [
- "bitflags 2.11.0",
+ "bitflags 2.11.1",
  "block",
  "core-graphics-types",
  "foreign-types 0.5.0",
@@ -1197,7 +1197,7 @@ checksum = "e380993072e52eef724eddfcde0ed013b0c023c3f0417336ed041aa9f076994e"
 dependencies = [
  "arrayvec",
  "bit-set",
- "bitflags 2.11.0",
+ "bitflags 2.11.1",
  "cfg_aliases",
  "codespan-reporting",
  "hexf-parse",
@@ -1217,7 +1217,7 @@ version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2076a31b7010b17a38c01907c45b945e8f11495ee4dd588309718901b1f7a5b7"
 dependencies = [
- "bitflags 2.11.0",
+ "bitflags 2.11.1",
  "jni-sys 0.3.1",
  "log",
  "ndk-sys",
@@ -1354,7 +1354,7 @@ version = "0.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d49e936b501e5c5bf01fda3a9452ff86dc3ea98ad5f283e1455153142d97518c"
 dependencies = [
- "bitflags 2.11.0",
+ "bitflags 2.11.1",
  "block2",
  "objc2",
  "objc2-foundation",
@@ -1366,7 +1366,7 @@ version = "0.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2a180dd8642fa45cdb7dd721cd4c11b1cadd4929ce112ebd8b9f5803cc79d536"
 dependencies = [
- "bitflags 2.11.0",
+ "bitflags 2.11.1",
  "dispatch2",
  "objc2",
 ]
@@ -1383,7 +1383,9 @@ version = "0.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e3e0adef53c21f888deb4fa59fc59f7eb17404926ee8a6f59f5df0fd7f9f3272"
 dependencies = [
- "bitflags 2.11.0",
+ "bitflags 2.11.1",
+ "block2",
+ "libc",
  "objc2",
  "objc2-core-foundation",
 ]
@@ -1484,9 +1486,9 @@ checksum = "a89322df9ebe1c1578d689c92318e070967d1042b512afbe49518723f4e6d5cd"
 
 [[package]]
 name = "pkg-config"
-version = "0.3.32"
+version = "0.3.33"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7edddbd0b52d732b21ad9a5fab5c704c14cd949e5e9a1ec5929a24fded1b904c"
+checksum = "19f132c84eca552bf34cab8ec81f1c1dcc229b811638f9d283dceabe58c5569e"
 
 [[package]]
 name = "png"
@@ -1494,7 +1496,7 @@ version = "0.18.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "60769b8b31b2a9f263dae2776c37b1b28ae246943cf719eb6946a1db05128a61"
 dependencies = [
- "bitflags 2.11.0",
+ "bitflags 2.11.1",
  "crc32fast",
  "fdeflate",
  "flate2",
@@ -1542,9 +1544,9 @@ dependencies = [
 
 [[package]]
 name = "profiling"
-version = "1.0.17"
+version = "1.0.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3eb8486b569e12e2c32ad3e204dbaba5e4b5b216e9367044f25f1dba42341773"
+checksum = "3d595e54a326bc53c1c197b32d295e14b169e3cfeaa8dc82b529f947fba6bcf5"
 
 [[package]]
 name = "quote"
@@ -1585,7 +1587,7 @@ version = "0.5.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ed2bf2547551a7053d6fdfafda3f938979645c44812fbfcda098faae3f1a362d"
 dependencies = [
- "bitflags 2.11.0",
+ "bitflags 2.11.1",
 ]
 
 [[package]]
@@ -1663,9 +1665,9 @@ checksum = "08d43f7aa6b08d49f382cde6a7982047c3426db949b1424bc4b7ec9ae12c6ce2"
 
 [[package]]
 name = "rustc-hash"
-version = "2.1.1"
+version = "2.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "357703d41365b4b27c590e3ed91eabb1b663f07c4c084095e60cbed4362dff0d"
+checksum = "94300abf3f1ae2e2b8ffb7b58043de3d399c73fa6f4b73826402a5c457614dbe"
 
 [[package]]
 name = "rustfft"
@@ -1687,7 +1689,7 @@ version = "1.1.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b6fe4565b9518b83ef4f91bb47ce29620ca828bd32cb7e408f0062e9930ba190"
 dependencies = [
- "bitflags 2.11.0",
+ "bitflags 2.11.1",
  "errno",
  "libc",
  "linux-raw-sys",
@@ -1806,7 +1808,7 @@ version = "0.3.0+sdk-1.3.268.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "eda41003dc44290527a59b13432d4a0379379fa074b70174882adfbdfd917844"
 dependencies = [
- "bitflags 2.11.0",
+ "bitflags 2.11.1",
 ]
 
 [[package]]
@@ -1998,21 +2000,23 @@ dependencies = [
 
 [[package]]
 name = "truce"
-version = "0.35.1"
-source = "git+https://github.com/truce-audio/truce?tag=v0.35.1#8a62cedb957e053d144de8359ca005ff9f07da82"
+version = "0.38.0"
+source = "git+https://github.com/truce-audio/truce?tag=v0.38.0#b6865c35688ae70189ef9aab1758615179a89441"
 dependencies = [
  "truce-clap",
  "truce-core",
  "truce-derive",
+ "truce-gui",
  "truce-loader",
  "truce-params",
 ]
 
 [[package]]
 name = "truce-aax"
-version = "0.35.1"
-source = "git+https://github.com/truce-audio/truce?tag=v0.35.1#8a62cedb957e053d144de8359ca005ff9f07da82"
+version = "0.38.0"
+source = "git+https://github.com/truce-audio/truce?tag=v0.38.0#b6865c35688ae70189ef9aab1758615179a89441"
 dependencies = [
+ "crossbeam-queue",
  "truce-core",
  "truce-gui",
  "truce-params",
@@ -2020,7 +2024,7 @@ dependencies = [
 
 [[package]]
 name = "truce-analyzer"
-version = "0.35.1"
+version = "0.38.0"
 dependencies = [
  "clap-sys",
  "egui",
@@ -2044,10 +2048,13 @@ dependencies = [
 
 [[package]]
 name = "truce-au"
-version = "0.35.1"
-source = "git+https://github.com/truce-audio/truce?tag=v0.35.1#8a62cedb957e053d144de8359ca005ff9f07da82"
+version = "0.38.0"
+source = "git+https://github.com/truce-audio/truce?tag=v0.38.0#b6865c35688ae70189ef9aab1758615179a89441"
 dependencies = [
  "cc",
+ "crossbeam-queue",
+ "objc2",
+ "objc2-foundation",
  "truce-core",
  "truce-params",
  "truce-shim-types",
@@ -2055,8 +2062,8 @@ dependencies = [
 
 [[package]]
 name = "truce-build"
-version = "0.35.1"
-source = "git+https://github.com/truce-audio/truce?tag=v0.35.1#8a62cedb957e053d144de8359ca005ff9f07da82"
+version = "0.38.0"
+source = "git+https://github.com/truce-audio/truce?tag=v0.38.0#b6865c35688ae70189ef9aab1758615179a89441"
 dependencies = [
  "serde",
  "toml",
@@ -2064,8 +2071,8 @@ dependencies = [
 
 [[package]]
 name = "truce-clap"
-version = "0.35.1"
-source = "git+https://github.com/truce-audio/truce?tag=v0.35.1#8a62cedb957e053d144de8359ca005ff9f07da82"
+version = "0.38.0"
+source = "git+https://github.com/truce-audio/truce?tag=v0.38.0#b6865c35688ae70189ef9aab1758615179a89441"
 dependencies = [
  "clap-sys",
  "crossbeam-queue",
@@ -2075,8 +2082,8 @@ dependencies = [
 
 [[package]]
 name = "truce-core"
-version = "0.35.1"
-source = "git+https://github.com/truce-audio/truce?tag=v0.35.1#8a62cedb957e053d144de8359ca005ff9f07da82"
+version = "0.38.0"
+source = "git+https://github.com/truce-audio/truce?tag=v0.38.0#b6865c35688ae70189ef9aab1758615179a89441"
 dependencies = [
  "png",
  "truce-params",
@@ -2085,20 +2092,22 @@ dependencies = [
 
 [[package]]
 name = "truce-derive"
-version = "0.35.1"
-source = "git+https://github.com/truce-audio/truce?tag=v0.35.1#8a62cedb957e053d144de8359ca005ff9f07da82"
+version = "0.38.0"
+source = "git+https://github.com/truce-audio/truce?tag=v0.38.0#b6865c35688ae70189ef9aab1758615179a89441"
 dependencies = [
  "proc-macro2",
  "quote",
  "syn",
+ "toml",
  "truce-build",
  "truce-params",
+ "truce-utils",
 ]
 
 [[package]]
 name = "truce-driver"
-version = "0.35.1"
-source = "git+https://github.com/truce-audio/truce?tag=v0.35.1#8a62cedb957e053d144de8359ca005ff9f07da82"
+version = "0.38.0"
+source = "git+https://github.com/truce-audio/truce?tag=v0.38.0#b6865c35688ae70189ef9aab1758615179a89441"
 dependencies = [
  "truce-core",
  "truce-params",
@@ -2106,13 +2115,13 @@ dependencies = [
 
 [[package]]
 name = "truce-dsp"
-version = "0.35.1"
-source = "git+https://github.com/truce-audio/truce?tag=v0.35.1#8a62cedb957e053d144de8359ca005ff9f07da82"
+version = "0.38.0"
+source = "git+https://github.com/truce-audio/truce?tag=v0.38.0#b6865c35688ae70189ef9aab1758615179a89441"
 
 [[package]]
 name = "truce-egui"
-version = "0.35.1"
-source = "git+https://github.com/truce-audio/truce?tag=v0.35.1#8a62cedb957e053d144de8359ca005ff9f07da82"
+version = "0.38.0"
+source = "git+https://github.com/truce-audio/truce?tag=v0.38.0#b6865c35688ae70189ef9aab1758615179a89441"
 dependencies = [
  "baseview",
  "egui",
@@ -2129,13 +2138,13 @@ dependencies = [
 
 [[package]]
 name = "truce-font"
-version = "0.35.1"
-source = "git+https://github.com/truce-audio/truce?tag=v0.35.1#8a62cedb957e053d144de8359ca005ff9f07da82"
+version = "0.38.0"
+source = "git+https://github.com/truce-audio/truce?tag=v0.38.0#b6865c35688ae70189ef9aab1758615179a89441"
 
 [[package]]
 name = "truce-gpu"
-version = "0.35.1"
-source = "git+https://github.com/truce-audio/truce?tag=v0.35.1#8a62cedb957e053d144de8359ca005ff9f07da82"
+version = "0.38.0"
+source = "git+https://github.com/truce-audio/truce?tag=v0.38.0#b6865c35688ae70189ef9aab1758615179a89441"
 dependencies = [
  "baseview",
  "bytemuck",
@@ -2151,8 +2160,8 @@ dependencies = [
 
 [[package]]
 name = "truce-gui"
-version = "0.35.1"
-source = "git+https://github.com/truce-audio/truce?tag=v0.35.1#8a62cedb957e053d144de8359ca005ff9f07da82"
+version = "0.38.0"
+source = "git+https://github.com/truce-audio/truce?tag=v0.38.0#b6865c35688ae70189ef9aab1758615179a89441"
 dependencies = [
  "baseview",
  "fontdue",
@@ -2163,14 +2172,24 @@ dependencies = [
  "tiny-skia",
  "truce-core",
  "truce-font",
+ "truce-gui-types",
  "truce-params",
+ "truce-plugin",
  "wgpu",
 ]
 
 [[package]]
+name = "truce-gui-types"
+version = "0.38.0"
+source = "git+https://github.com/truce-audio/truce?tag=v0.38.0#b6865c35688ae70189ef9aab1758615179a89441"
+dependencies = [
+ "truce-core",
+]
+
+[[package]]
 name = "truce-loader"
-version = "0.35.1"
-source = "git+https://github.com/truce-audio/truce?tag=v0.35.1#8a62cedb957e053d144de8359ca005ff9f07da82"
+version = "0.38.0"
+source = "git+https://github.com/truce-audio/truce?tag=v0.38.0#b6865c35688ae70189ef9aab1758615179a89441"
 dependencies = [
  "crc32fast",
  "libloading 0.9.0",
@@ -2184,21 +2203,31 @@ dependencies = [
 
 [[package]]
 name = "truce-params"
-version = "0.35.1"
-source = "git+https://github.com/truce-audio/truce?tag=v0.35.1#8a62cedb957e053d144de8359ca005ff9f07da82"
+version = "0.38.0"
+source = "git+https://github.com/truce-audio/truce?tag=v0.38.0#b6865c35688ae70189ef9aab1758615179a89441"
 dependencies = [
- "bitflags 2.11.0",
+ "bitflags 2.11.1",
+]
+
+[[package]]
+name = "truce-plugin"
+version = "0.38.0"
+source = "git+https://github.com/truce-audio/truce?tag=v0.38.0#b6865c35688ae70189ef9aab1758615179a89441"
+dependencies = [
+ "truce-core",
+ "truce-gui-types",
+ "truce-params",
 ]
 
 [[package]]
 name = "truce-shim-types"
-version = "0.35.1"
-source = "git+https://github.com/truce-audio/truce?tag=v0.35.1#8a62cedb957e053d144de8359ca005ff9f07da82"
+version = "0.38.0"
+source = "git+https://github.com/truce-audio/truce?tag=v0.38.0#b6865c35688ae70189ef9aab1758615179a89441"
 
 [[package]]
 name = "truce-standalone"
-version = "0.35.1"
-source = "git+https://github.com/truce-audio/truce?tag=v0.35.1#8a62cedb957e053d144de8359ca005ff9f07da82"
+version = "0.38.0"
+source = "git+https://github.com/truce-audio/truce?tag=v0.38.0#b6865c35688ae70189ef9aab1758615179a89441"
 dependencies = [
  "baseview",
  "cpal",
@@ -2218,8 +2247,8 @@ dependencies = [
 
 [[package]]
 name = "truce-test"
-version = "0.35.1"
-source = "git+https://github.com/truce-audio/truce?tag=v0.35.1#8a62cedb957e053d144de8359ca005ff9f07da82"
+version = "0.38.0"
+source = "git+https://github.com/truce-audio/truce?tag=v0.38.0#b6865c35688ae70189ef9aab1758615179a89441"
 dependencies = [
  "png",
  "toml",
@@ -2231,25 +2260,27 @@ dependencies = [
 
 [[package]]
 name = "truce-utils"
-version = "0.35.1"
-source = "git+https://github.com/truce-audio/truce?tag=v0.35.1#8a62cedb957e053d144de8359ca005ff9f07da82"
+version = "0.38.0"
+source = "git+https://github.com/truce-audio/truce?tag=v0.38.0#b6865c35688ae70189ef9aab1758615179a89441"
 
 [[package]]
 name = "truce-vst2"
-version = "0.35.1"
-source = "git+https://github.com/truce-audio/truce?tag=v0.35.1#8a62cedb957e053d144de8359ca005ff9f07da82"
+version = "0.38.0"
+source = "git+https://github.com/truce-audio/truce?tag=v0.38.0#b6865c35688ae70189ef9aab1758615179a89441"
 dependencies = [
  "cc",
+ "crossbeam-queue",
  "truce-core",
  "truce-params",
 ]
 
 [[package]]
 name = "truce-vst3"
-version = "0.35.1"
-source = "git+https://github.com/truce-audio/truce?tag=v0.35.1#8a62cedb957e053d144de8359ca005ff9f07da82"
+version = "0.38.0"
+source = "git+https://github.com/truce-audio/truce?tag=v0.38.0#b6865c35688ae70189ef9aab1758615179a89441"
 dependencies = [
  "cc",
+ "crossbeam-queue",
  "truce-core",
  "truce-params",
 ]
@@ -2272,7 +2303,7 @@ version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cb30dbbd9036155e74adad6812e9898d03ec374946234fbcebd5dfc7b9187b90"
 dependencies = [
- "rustc-hash 2.1.1",
+ "rustc-hash 2.1.2",
 ]
 
 [[package]]
@@ -2341,9 +2372,9 @@ dependencies = [
 
 [[package]]
 name = "wasm-bindgen"
-version = "0.2.115"
+version = "0.2.121"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6523d69017b7633e396a89c5efab138161ed5aafcbc8d3e5c5a42ae38f50495a"
+checksum = "49ace1d07c165b0864824eee619580c4689389afa9dc9ed3a4c75040d82e6790"
 dependencies = [
  "cfg-if",
  "once_cell",
@@ -2354,9 +2385,9 @@ dependencies = [
 
 [[package]]
 name = "wasm-bindgen-futures"
-version = "0.4.65"
+version = "0.4.71"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2d1faf851e778dfa54db7cd438b70758eba9755cb47403f3496edd7c8fc212f0"
+checksum = "96492d0d3ffba25305a7dc88720d250b1401d7edca02cc3bcd50633b424673b8"
 dependencies = [
  "js-sys",
  "wasm-bindgen",
@@ -2364,9 +2395,9 @@ dependencies = [
 
 [[package]]
 name = "wasm-bindgen-macro"
-version = "0.2.115"
+version = "0.2.121"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4e3a6c758eb2f701ed3d052ff5737f5bfe6614326ea7f3bbac7156192dc32e67"
+checksum = "8e68e6f4afd367a562002c05637acb8578ff2dea1943df76afb9e83d177c8578"
 dependencies = [
  "quote",
  "wasm-bindgen-macro-support",
@@ -2374,9 +2405,9 @@ dependencies = [
 
 [[package]]
 name = "wasm-bindgen-macro-support"
-version = "0.2.115"
+version = "0.2.121"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "921de2737904886b52bcbb237301552d05969a6f9c40d261eb0533c8b055fedf"
+checksum = "d95a9ec35c64b2a7cb35d3fead40c4238d0940c86d107136999567a4703259f2"
 dependencies = [
  "bumpalo",
  "proc-macro2",
@@ -2387,18 +2418,18 @@ dependencies = [
 
 [[package]]
 name = "wasm-bindgen-shared"
-version = "0.2.115"
+version = "0.2.121"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a93e946af942b58934c604527337bad9ae33ba1d5c6900bbb41c2c07c2364a93"
+checksum = "c4e0100b01e9f0d03189a92b96772a1fb998639d981193d7dbab487302513441"
 dependencies = [
  "unicode-ident",
 ]
 
 [[package]]
 name = "web-sys"
-version = "0.3.92"
+version = "0.3.98"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "84cde8507f4d7cfcb1185b8cb5890c494ffea65edbe1ba82cfd63661c805ed94"
+checksum = "4b572dff8bcf38bad0fa19729c89bb5748b2b9b1d8be70cf90df697e3a8f32aa"
 dependencies = [
  "js-sys",
  "wasm-bindgen",
@@ -2421,12 +2452,11 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6b0b3436f0729f6cdf2e6e9201f3d39dc95813fad61d826c1ed07918b4539353"
 dependencies = [
  "arrayvec",
- "bitflags 2.11.0",
+ "bitflags 2.11.1",
  "cfg_aliases",
  "document-features",
  "js-sys",
  "log",
- "naga",
  "parking_lot",
  "profiling",
  "raw-window-handle 0.6.2",
@@ -2448,7 +2478,7 @@ checksum = "7f0aa306497a238d169b9dc70659105b4a096859a34894544ca81719242e1499"
 dependencies = [
  "arrayvec",
  "bit-vec",
- "bitflags 2.11.0",
+ "bitflags 2.11.1",
  "cfg_aliases",
  "document-features",
  "indexmap",
@@ -2475,7 +2505,7 @@ dependencies = [
  "arrayvec",
  "ash",
  "bit-set",
- "bitflags 2.11.0",
+ "bitflags 2.11.1",
  "block",
  "bytemuck",
  "cfg_aliases",
@@ -2517,7 +2547,7 @@ version = "24.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "50ac044c0e76c03a0378e7786ac505d010a873665e2d51383dcff8dd227dc69c"
 dependencies = [
- "bitflags 2.11.0",
+ "bitflags 2.11.1",
  "js-sys",
  "log",
  "web-sys",
@@ -2927,12 +2957,13 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1ebf944e87a7c253233ad6766e082e3cd714b5d03812acc24c318f549614536e"
 
 [[package]]
-name = "x11"
+name = "x11-dl"
 version = "2.21.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "502da5464ccd04011667b11c435cb992822c2c0dbde1770c988480d312a0db2e"
+checksum = "38735924fedd5314a6e548792904ed8c6de6636285cb9fec04d5b1db85c1516f"
 dependencies = [
  "libc",
+ "once_cell",
  "pkg-config",
 ]
 
@@ -2945,6 +2976,8 @@ dependencies = [
  "as-raw-xcb-connection",
  "gethostname",
  "libc",
+ "libloading 0.8.9",
+ "once_cell",
  "rustix",
  "x11rb-protocol",
  "xcursor",
@@ -2970,18 +3003,18 @@ checksum = "3ae8337f8a065cfc972643663ea4279e04e7256de865aa66fe25cec5fb912d3f"
 
 [[package]]
 name = "zerocopy"
-version = "0.8.47"
+version = "0.8.48"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "efbb2a062be311f2ba113ce66f697a4dc589f85e78a4aea276200804cea0ed87"
+checksum = "eed437bf9d6692032087e337407a86f04cd8d6a16a37199ed57949d415bd68e9"
 dependencies = [
  "zerocopy-derive",
 ]
 
 [[package]]
 name = "zerocopy-derive"
-version = "0.8.47"
+version = "0.8.48"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0e8bc7269b54418e7aeeef514aa68f8690b8c0489a06b0136e5f57c4c5ccab89"
+checksum = "70e3cd084b1788766f53af483dd21f93881ff30d7320490ec3ef7526d203bad4"
 dependencies = [
  "proc-macro2",
  "quote",

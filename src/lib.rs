@@ -5,8 +5,11 @@ mod ui_state;
 
 use std::sync::Arc;
 
-use truce::prelude::*;
-use truce_core::cast::{discrete_norm, len_u32, sample_f32};
+// Mode 2: audio buffer stays at the host's `f32` wire format but
+// `param.read()` returns `f64` for stable intermediate gain math.
+// The analyzer narrows once at the buffer-write site (`.to_f32()`).
+use truce::prelude64m::*;
+use truce_core::cast::{discrete_norm, len_u32};
 use truce_dsp::{AudioTapProducer, audio_tap};
 use truce_egui::EguiEditor;
 
@@ -126,6 +129,10 @@ impl Drop for TruceAnalyzer {
 }
 
 impl PluginLogic for TruceAnalyzer {
+    fn bus_layouts() -> Vec<BusLayout> {
+        vec![BusLayout::stereo()]
+    }
+
     fn reset(&mut self, sr: f64, bs: usize) {
         self.params.set_sample_rate(sr);
         // Size the push scratch to one block of interleaved stereo. A
@@ -159,13 +166,16 @@ impl PluginLogic for TruceAnalyzer {
 
         self.scratch.clear();
         for i in 0..buffer.num_samples() {
-            let gain = db_to_linear(self.params.gain.smoothed_next_f64());
+            // `.read()` returns `f64` under `prelude64m` — the
+            // gain multiply runs in `f64`, then narrows once when
+            // we write back into the `f32` host buffer.
+            let gain = db_to_linear(self.params.gain.read());
 
             let mut left = 0.0f32;
             let mut right = 0.0f32;
             for ch in 0..channels {
                 let (inp, out) = buffer.io(ch);
-                out[i] = sample_f32(f64::from(inp[i]) * gain);
+                out[i] = (f64::from(inp[i]) * gain).to_f32();
                 match ch {
                     0 => left = out[i],
                     1 => right = out[i],
@@ -198,12 +208,16 @@ impl PluginLogic for TruceAnalyzer {
         StateTrait::serialize(&self.state)
     }
 
-    fn load_state(&mut self, data: &[u8]) {
-        if let Some(ps) = <PersistentState as StateTrait>::deserialize(data) {
-            if !ps.instance_name.is_empty() {
-                registry::rename(self.instance_id, &ps.instance_name);
+    fn load_state(&mut self, data: &[u8]) -> Result<(), StateLoadError> {
+        match <PersistentState as StateTrait>::deserialize(data) {
+            Some(ps) => {
+                if !ps.instance_name.is_empty() {
+                    registry::rename(self.instance_id, &ps.instance_name);
+                }
+                self.state = ps;
+                Ok(())
             }
-            self.state = ps;
+            None => Err(StateLoadError::Malformed("PersistentState")),
         }
     }
 
@@ -253,7 +267,6 @@ impl truce_egui::EditorUi<TruceAnalyzerParams> for AnalyzerEditorUi {
 truce::plugin! {
     logic: TruceAnalyzer,
     params: TruceAnalyzerParams,
-    bus_layouts: [BusLayout::stereo()],
 }
 
 // ---------------------------------------------------------------------------

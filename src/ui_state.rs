@@ -46,8 +46,9 @@ pub struct RemoteCache {
 
 // ---------------------------------------------------------------------------
 // Persistent state — serialized as JSON to keep wire-format simple and
-// stable across truce upgrades. The truce v0.35.0 `#[derive(State)]`
-// macro emits a `usize + u32` mismatch that prevents using it here.
+// stable across truce upgrades. truce v0.36.1's `#[derive(State)]` macro
+// still emits a `usize + u32` mismatch in the generated deserializer,
+// so we hand-roll the StateTrait impl.
 // ---------------------------------------------------------------------------
 
 #[derive(Serialize, Deserialize, Default, Clone)]

@@ -5,7 +5,8 @@ use std::time::Duration;
 
 use rustfft::num_complex::Complex;
 use rustfft::{Fft, FftPlanner};
-use truce_core::cast::{param_f32, sample_count_usize, sample_f32};
+use truce_core::Float;
+use truce_core::cast::sample_count_usize;
 use truce_dsp::AudioTapConsumer;
 
 use crate::shmem::SharedMemoryWriter;
@@ -250,8 +251,8 @@ fn generate_kernels(
                 let hann = 0.5 * (1.0 - (pi2 * n as f64 * inv_n).cos());
                 let phase = -pi2 * f64::from(freq) * n as f64 / sample_rate;
                 kernel[offset + n] = Complex::new(
-                    sample_f32(hann * phase.cos() * inv_n),
-                    sample_f32(hann * phase.sin() * inv_n),
+                    f32::from_f64(hann * phase.cos() * inv_n),
+                    f32::from_f64(hann * phase.sin() * inv_n),
                 );
             }
 
@@ -351,7 +352,7 @@ impl AnalyzerCore {
     }
 
     pub fn reset(&mut self, sample_rate: f64) {
-        self.spectrum.set_sample_rate(param_f32(sample_rate));
+        self.spectrum.set_sample_rate(f32::from_f64(sample_rate));
 
         let q = q_factor();
         let max_window = sample_count_usize(q * sample_rate / f64::from(CQT_F_MIN));
@@ -565,7 +566,7 @@ impl AnalyzerWorker {
     pub fn reset(&self, sample_rate: f64) {
         self.ctl
             .sample_rate_bits
-            .store(param_f32(sample_rate).to_bits(), Ordering::Relaxed);
+            .store(f32::from_f64(sample_rate).to_bits(), Ordering::Relaxed);
         self.ctl.reset_version.fetch_add(1, Ordering::Release);
     }
 }

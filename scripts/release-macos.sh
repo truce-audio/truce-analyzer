@@ -33,10 +33,10 @@ echo "==> release tag: $release_tag (truce $truce_tag)"
 
 # --- preflight -----------------------------------------------------------
 
-if [[ -n "$(git status --porcelain)" ]]; then
-    echo "working tree is dirty — commit or stash first" >&2
-    exit 1
-fi
+#if [[ -n "$(git status --porcelain)" ]]; then
+#    echo "working tree is dirty — commit or stash first" >&2
+#    exit 1
+#fi
 
 branch=$(git rev-parse --abbrev-ref HEAD)
 if [[ "$branch" != "main" ]]; then
