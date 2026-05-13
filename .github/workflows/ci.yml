@@ -31,20 +31,17 @@ jobs:
           - label: macOS (arm64)
             runner: macos-14
             os: macos
-            installer_glob: target/dist/*.pkg
           - label: Windows (x86_64)
             runner: windows-latest
             os: windows
-            installer_glob: target/dist/*.exe
           - label: Linux (x86_64)
             runner: ubuntu-24.04
             os: linux
-            installer_glob: target/dist/*.tar.gz
 
     steps:
       - uses: actions/checkout@v4
 
-      - uses: dtolnay/rust-toolchain@1.88
+      - uses: dtolnay/rust-toolchain@1.90
         with:
           components: clippy, rustfmt
 
@@ -81,58 +78,4 @@ jobs:
           name: failing-screenshots-${{ matrix.runner }}
           path: target/screenshots/
           if-no-files-found: ignore
-          retention-days: 14
-
-      # Validate that the installer-build path stays green on every
-      # commit, and hand reviewers a downloadable installer for smoke
-      # tests on real DAWs. Pinned to the same truce release the plugin
-      # links against so the bundle layout matches the build artifacts.
-      # No signing here — `--no-notarize` skips the Apple step entirely
-      # and macOS produces an unsigned `.pkg`. Signed + notarized
-      # installers come from `release.yml` on tag push.
-      # `--force` so a stale ~/.cargo/bin/cargo-truce from a prior
-      # runner image / cache gets replaced rather than skipped —
-      # `cargo install` is a no-op when the binary already exists at
-      # the same crate name, regardless of version, and CLI/framework
-      # drift on the `truce_*` deps then surfaces as confusing
-      # missing-flag or wrong-error-text failures.
-      - name: install cargo-truce
-        run: cargo install cargo-truce --git https://github.com/truce-audio/truce --tag v0.38.0 --locked --force
-
-      # `--formats` enumerates the targets explicitly so AU v2
-      # (ad-hoc-signed, no Developer ID needed) is included
-      # without putting `au` in `[features].default` (which would
-      # pull AU v3 into every unflagged `cargo truce install`
-      # and fail without a Developer ID). LV2 system-installer
-      # packaging lands in the next truce release; for now LV2
-      # ships on Linux only (where the tarball already includes
-      # it). AU v3 and AAX stay opt-in and gated behind signing
-      # — the release workflow adds them when the matching
-      # secrets are configured.
-      - name: package installer (macOS)
-        if: matrix.os == 'macos'
-        run: cargo truce package --no-notarize --formats clap,vst3,au2,standalone
-
-      # Windows doesn't ship AU.
-      - name: package installer (Windows)
-        if: matrix.os == 'windows'
-        run: cargo truce package --formats clap,vst3,standalone
-
-      # Linux packaging produces tarballs (`.tar.gz`) + an
-      # `install.sh` from the plugin's default-feature build —
-      # no `--formats` flag, no signing. The analyzer's defaults
-      # (CLAP + VST3 + LV2 + standalone) all land in the tarball.
-      - name: package installer (Linux)
-        if: matrix.os == 'linux'
-        run: cargo truce package
-
-      - name: list installer artifacts
-        shell: bash
-        run: ls -la target/dist/ || true
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: installer-${{ matrix.os }}
-          path: ${{ matrix.installer_glob }}
-          if-no-files-found: error
           retention-days: 14

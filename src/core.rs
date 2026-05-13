@@ -396,11 +396,11 @@ impl AnalyzerCore {
     /// Block until background kernel generation completes (for tests).
     #[allow(dead_code)]
     pub fn wait_for_kernels(&mut self) {
-        if let Some(rx) = self.kernel_rx.take() {
-            if let Ok(data) = rx.recv() {
-                self.kernels = data.kernels;
-                self.fft = Some(data.fft);
-            }
+        if let Some(rx) = self.kernel_rx.take()
+            && let Ok(data) = rx.recv()
+        {
+            self.kernels = data.kernels;
+            self.fft = Some(data.fft);
         }
     }
 

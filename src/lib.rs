@@ -559,10 +559,10 @@ fn draw_central(ctx: &egui::Context, ui_state: &UiState) {
             draw_labels(&painter, spec);
             draw_legend(&painter, ui_state, spec);
 
-            if let Some(pos) = response.hover_pos() {
-                if spec.contains(pos) {
-                    draw_hover(&painter, pos, ui_state, spec);
-                }
+            if let Some(pos) = response.hover_pos()
+                && spec.contains(pos)
+            {
+                draw_hover(&painter, pos, ui_state, spec);
             }
         });
 }
