@@ -1,6 +1,6 @@
 # Truce Analyzer
 
-**[Download the latest release](https://github.com/truce-audio/truce-analyzer/releases/latest)** — available as CLAP, VST3, LV2, AU, and AAX.
+**[Download the latest release](https://github.com/truce-audio/truce-analyzer/releases/latest)** — `.pkg` for macOS, `.exe` for Windows, `.tar.gz` for Linux. Ships CLAP, VST3, LV2, and AU v2 (macOS). AU v3 and AAX are opt-in per build (Developer ID signing and PACE/iLok signing respectively).
 
 A real-time frequency spectrum analyzer plugin for debugging/reverse-engineering audio plugins. 
 
@@ -33,7 +33,7 @@ You can also select multiple sources to compare against several points in your c
 
 ## Formats
 
-Available as CLAP, VST3, LV2, AU, and AAX. Works in any DAW that supports these formats.
+Available as CLAP, VST3, LV2, and AU v2 (macOS). Works in any DAW that supports these formats. AU v3 and AAX builds are gated behind their respective signing setups and not part of the default release.
 
 ## License
 

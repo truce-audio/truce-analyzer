@@ -58,17 +58,23 @@ fi
 # `cargo.exe truce package` resolves the subcommand from there, so
 # WSL's own cargo / cargo-truce (if any) is irrelevant.
 echo "==> installing cargo-truce@$truce_tag via cargo.exe"
+# `--force` so any stale `cargo-truce.exe` (prior release, dev
+# work) gets replaced rather than silently kept. `cargo install`
+# is a no-op when the binary already exists at the same name.
 cargo.exe install cargo-truce \
     --git https://github.com/truce-audio/truce \
-    --tag "$truce_tag" --locked
+    --tag "$truce_tag" --locked --force
 
 # --- build installer -----------------------------------------------------
 
 mkdir -p target/dist
 rm -f target/dist/*.exe
 
+# Windows release targets — `--formats` is set explicitly to match
+# what the macOS pipeline ships (no AU on Windows; AAX out until
+# its signing path is wired in).
 echo "==> packaging via cargo.exe"
-cargo.exe truce package
+cargo.exe truce package --formats clap,vst3,vst2,standalone
 
 exe_path=$(ls -1 target/dist/*.exe 2>/dev/null | head -1)
 if [[ -z "${exe_path:-}" ]]; then

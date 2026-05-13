@@ -69,20 +69,30 @@ fi
 # --- install cargo-truce -------------------------------------------------
 
 echo "==> installing cargo-truce@$truce_tag"
+# `--force` so an already-installed `cargo-truce` (from a previous
+# release run or local dev work) is replaced rather than silently
+# kept at the old version. `cargo install` is a no-op when the
+# binary already exists, regardless of the requested version.
 cargo install cargo-truce --git https://github.com/truce-audio/truce \
-    --tag "$truce_tag" --locked
+    --tag "$truce_tag" --locked --force
 
 # --- build installer -----------------------------------------------------
 
 mkdir -p target/dist
 rm -f target/dist/*.pkg
 
+# `--formats` enumerates the release targets explicitly so AU v2
+# gets built even though `au` is intentionally out of
+# `[features].default` (keeping AU v3 out of unflagged installs).
+# AU v3 / AAX stay outside the release pipeline until their
+# signing setups are added.
+formats="clap,vst3,au2,standalone"
 if xcrun notarytool history --keychain-profile "TRUCE_NOTARY" >/dev/null 2>&1; then
-    echo "==> packaging with notarization"
-    cargo truce package
+    echo "==> packaging with notarization (formats: $formats)"
+    cargo truce package --formats "$formats"
 else
-    echo "==> packaging without notarization (no TRUCE_NOTARY keychain profile)"
-    cargo truce package --no-notarize
+    echo "==> packaging without notarization (no TRUCE_NOTARY keychain profile; formats: $formats)"
+    cargo truce package --no-notarize --formats "$formats"
 fi
 
 pkg_path=$(ls -1 target/dist/*.pkg 2>/dev/null | head -1)

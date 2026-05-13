@@ -40,6 +40,11 @@ jobs:
             os: windows
             artifact: windows-installer
             installer_glob: target/dist/*.exe
+          - label: Linux (x86_64)
+            runner: ubuntu-24.04
+            os: linux
+            artifact: linux-installer
+            installer_glob: target/dist/*.tar.gz
 
     steps:
       - uses: actions/checkout@v4
@@ -50,13 +55,32 @@ jobs:
         with:
           key: ${{ matrix.runner }}-release
 
+      # Audio / windowing / GPU dev headers the framework links
+      # against. Same list `truce` uses in its own Linux CI; the
+      # macOS / Windows runs skip this step entirely.
+      - name: Linux system deps
+        if: matrix.os == 'linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential pkg-config \
+            libx11-dev libx11-xcb-dev libxcb1-dev libxcb-dri2-0-dev libxcb-icccm4-dev libxcursor-dev \
+            libxkbcommon-dev libxkbcommon-x11-dev libxrandr-dev \
+            libgl1-mesa-dev libvulkan-dev mesa-vulkan-drivers \
+            libasound2-dev libjack-jackd2-dev \
+            libfontconfig1-dev libfreetype-dev
+
       # `cargo truce package` builds + bundles + signs + wraps each
       # plugin format into a per-OS installer (`.pkg` on macOS,
       # `.exe` on Windows). Pinned to the same truce release the
       # plugin links against so the installer layout matches the
       # build artifacts exactly.
+      # `--force` so any stale `cargo-truce` (cached runner image,
+       # prior release run, locally-installed older version) gets
+       # replaced rather than silently kept. Skipping `--force` would
+       # leave CLI / framework versions drifting against each other.
       - name: install cargo-truce
-        run: cargo install cargo-truce --git https://github.com/truce-audio/truce --tag v0.35.1 --locked
+        run: cargo install cargo-truce --git https://github.com/truce-audio/truce --tag v0.38.0 --locked --force
 
       # macOS code-signing setup. All steps are no-ops when the
       # signing secrets aren't configured (forks, contributor PRs),
@@ -100,16 +124,32 @@ jobs:
           TRUCE_SIGNING_IDENTITY: ${{ secrets.TRUCE_SIGNING_IDENTITY }}
           TRUCE_INSTALLER_SIGNING_IDENTITY: ${{ secrets.TRUCE_INSTALLER_SIGNING_IDENTITY }}
         run: |
-          # Skip notarization automatically when the keychain profile
-          # isn't present (no APPLE_ID secret configured).
+          # `--formats` enumerates the targets so AU v2 is included
+          # without `au` in `[features].default` (which would pull
+          # AU v3 into every `cargo truce install` run and fail
+          # without a Developer ID). AU v3 / AAX stay out of the
+          # release pipeline until their signing setups are added.
+          #
+          # Skip notarization automatically when the keychain
+          # profile isn't present (no APPLE_ID secret configured).
+          formats="clap,vst3,au2,standalone"
           if xcrun notarytool history --keychain-profile "TRUCE_NOTARY" >/dev/null 2>&1; then
-            cargo truce package
+            cargo truce package --formats "$formats"
           else
-            cargo truce package --no-notarize
+            cargo truce package --no-notarize --formats "$formats"
           fi
 
       - name: build installer (Windows)
         if: matrix.os == 'windows'
+        # Windows doesn't have AU.
+        run: cargo truce package --formats clap,vst3,standalone
+
+      # Linux packaging produces a `.tar.gz` + `install.sh` from
+      # the plugin's default-feature build — no `--formats` flag,
+      # no signing. The analyzer's defaults (CLAP + VST3 + LV2 +
+      # standalone) all land in the tarball.
+      - name: build installer (Linux)
+        if: matrix.os == 'linux'
         run: cargo truce package
 
       - name: list installer artifacts
@@ -160,6 +200,7 @@ jobs:
             echo
             echo "- macOS: \`Truce Analyzer-*.pkg\`"
             echo "- Windows: \`Truce Analyzer-*.exe\`"
+            echo "- Linux: \`truce-analyzer-*-linux-*.tar.gz\` (run \`./install.sh\` from the unpacked dir)"
           } > "$NOTES"
 
       - name: create release
@@ -170,6 +211,7 @@ jobs:
           files: |
             dist/macos-installer/*.pkg
             dist/windows-installer/*.exe
+            dist/linux-installer/*.tar.gz
             screenshots/analyzer_spectrum_*.png
             screenshots/analyzer_diff_*.png
           fail_on_unmatched_files: true

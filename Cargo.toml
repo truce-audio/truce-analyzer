@@ -12,10 +12,17 @@ path = "src/main.rs"
 required-features = ["standalone"]
 
 [features]
-default = ["clap", "vst3", "vst2", "au", "aax", "standalone"]
+# Defaults pin the no-signing-required formats so `cargo truce
+# install` (and CI without secrets) work without any developer-
+# credential setup. `au` (AU v3 install path) needs a Developer
+# ID Application identity with a real team ID; `aax` needs PACE /
+# iLok signing + the AAX SDK. Both are opt-in per command
+# (`--au2` for AU v2 only, `--au3`, `--aax`) or per build
+# (enable the feature explicitly).
+default = ["clap", "vst3", "lv2", "standalone"]
 clap = ["dep:truce-clap", "dep:clap-sys"]
 vst3 = ["dep:truce-vst3"]
-vst2 = ["dep:truce-vst2"]
+lv2 = ["dep:truce-lv2"]
 au = ["dep:truce-au"]
 aax = ["dep:truce-aax"]
 shell = ["truce/shell"]
@@ -29,7 +36,7 @@ truce-core       = { git = "https://github.com/truce-audio/truce", tag = "v0.38.
 truce-dsp        = { git = "https://github.com/truce-audio/truce", tag = "v0.38.0" }
 truce-clap       = { git = "https://github.com/truce-audio/truce", tag = "v0.38.0", optional = true }
 truce-vst3       = { git = "https://github.com/truce-audio/truce", tag = "v0.38.0", optional = true }
-truce-vst2       = { git = "https://github.com/truce-audio/truce", tag = "v0.38.0", optional = true }
+truce-lv2        = { git = "https://github.com/truce-audio/truce", tag = "v0.38.0", optional = true }
 truce-au         = { git = "https://github.com/truce-audio/truce", tag = "v0.38.0", optional = true }
 truce-aax        = { git = "https://github.com/truce-audio/truce", tag = "v0.38.0", optional = true }
 truce-standalone = { git = "https://github.com/truce-audio/truce", tag = "v0.38.0", optional = true }

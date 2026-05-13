@@ -2040,9 +2040,9 @@ dependencies = [
  "truce-dsp",
  "truce-egui",
  "truce-gui",
+ "truce-lv2",
  "truce-standalone",
  "truce-test",
- "truce-vst2",
  "truce-vst3",
 ]
 
@@ -2202,6 +2202,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "truce-lv2"
+version = "0.38.0"
+source = "git+https://github.com/truce-audio/truce?tag=v0.38.0#b6865c35688ae70189ef9aab1758615179a89441"
+dependencies = [
+ "objc",
+ "truce-core",
+ "truce-params",
+]
+
+[[package]]
 name = "truce-params"
 version = "0.38.0"
 source = "git+https://github.com/truce-audio/truce?tag=v0.38.0#b6865c35688ae70189ef9aab1758615179a89441"
@@ -2262,17 +2272,6 @@ dependencies = [
 name = "truce-utils"
 version = "0.38.0"
 source = "git+https://github.com/truce-audio/truce?tag=v0.38.0#b6865c35688ae70189ef9aab1758615179a89441"
-
-[[package]]
-name = "truce-vst2"
-version = "0.38.0"
-source = "git+https://github.com/truce-audio/truce?tag=v0.38.0#b6865c35688ae70189ef9aab1758615179a89441"
-dependencies = [
- "cc",
- "crossbeam-queue",
- "truce-core",
- "truce-params",
-]
 
 [[package]]
 name = "truce-vst3"
