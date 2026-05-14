@@ -87,8 +87,13 @@ echo "==> built $tarball_path"
 
 # --- upload --------------------------------------------------------------
 
+extras=()
+for f in screenshots/analyzer_spectrum_linux.png screenshots/analyzer_diff_linux.png; do
+    [[ -f "$f" ]] && extras+=("$f")
+done
+
 echo "==> uploading $(basename "$tarball_path") to release $release_tag"
-gh release upload "$release_tag" "$tarball_path" --clobber
+gh release upload "$release_tag" "$tarball_path" "${extras[@]}" --clobber
 
 echo
 echo "==> Linux release done."
