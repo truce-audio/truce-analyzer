@@ -24,7 +24,7 @@ on:
         type: string
         default: "linux,macos,windows"
         required: false
-  pull_request:
+  push:
 
 permissions:
   contents: read
