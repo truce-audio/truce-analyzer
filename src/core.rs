@@ -7,7 +7,7 @@ use rustfft::num_complex::Complex;
 use rustfft::{Fft, FftPlanner};
 use truce_core::Float;
 use truce_core::cast::sample_count_usize;
-use truce_dsp::AudioTapConsumer;
+use ringbuf::{HeapCons, traits::Consumer};
 
 use crate::shmem::SharedMemoryWriter;
 
@@ -538,8 +538,13 @@ pub fn format_freq(freq: f32) -> String {
 
 // ---------------------------------------------------------------------------
 // AnalyzerWorker — runs AnalyzerCore on a dedicated thread so the audio
-// thread only has to push samples into an AudioTap.
+// thread only has to push samples into the SPSC tap.
 // ---------------------------------------------------------------------------
+
+/// Interleaved stereo: the tap is sample-typed but the worker reads
+/// it as L/R pairs. Producer- and consumer-side helpers both rely on
+/// this constant.
+const TAP_CHANNELS: usize = 2;
 
 /// Control channel between the audio thread and the analyzer worker.
 ///
@@ -594,7 +599,7 @@ const DRAIN_FRAMES: usize = 2048;
 /// worker thread exits.
 pub fn spawn_analyzer_worker(
     spectrum: Arc<SpectrumData>,
-    mut tap_rx: AudioTapConsumer,
+    mut tap_rx: HeapCons<f32>,
     shmem_writer: Option<SharedMemoryWriter>,
 ) -> AnalyzerWorker {
     let ctl = Arc::new(WorkerCtl {
@@ -612,10 +617,10 @@ pub fn spawn_analyzer_worker(
                 core.set_shmem_writer(writer);
             }
 
-            let channels = tap_rx.channels() as usize;
-            debug_assert_eq!(channels, 2, "worker assumes stereo tap");
-
-            let mut scratch = vec![0.0_f32; DRAIN_FRAMES * channels];
+            // Producer is responsible for keeping pushes frame-aligned
+            // (see `push_stereo_frames` in lib.rs), so a sample count
+            // popped here is always a multiple of `TAP_CHANNELS`.
+            let mut scratch = vec![0.0_f32; DRAIN_FRAMES * TAP_CHANNELS];
 
             let mut last_reset_version: u32 = 0;
 
@@ -637,8 +642,8 @@ pub fn spawn_analyzer_worker(
                     }
                 }
 
-                let frames = tap_rx.read(&mut scratch, DRAIN_FRAMES);
-                if frames == 0 {
+                let samples = tap_rx.pop_slice(&mut scratch);
+                if samples == 0 {
                     // Nothing to do — sleep briefly. ~4 ms is short
                     // enough that a 60 Hz UI never sees stale data,
                     // long enough to avoid spinning the CPU.
@@ -646,9 +651,14 @@ pub fn spawn_analyzer_worker(
                     continue;
                 }
 
+                debug_assert!(
+                    samples.is_multiple_of(TAP_CHANNELS),
+                    "producer guarantees frame-aligned pushes",
+                );
+                let frames = samples / TAP_CHANNELS;
                 for f in 0..frames {
-                    let l = scratch[f * channels];
-                    let r = scratch[f * channels + 1];
+                    let l = scratch[f * TAP_CHANNELS];
+                    let r = scratch[f * TAP_CHANNELS + 1];
                     core.process_stereo(l, r);
                 }
             }

@@ -1,6 +1,6 @@
 [package]
 name = "truce-analyzer"
-version = "0.40.1"
+version = "0.48.1"
 edition = "2024"
 
 [lib]
@@ -20,35 +20,44 @@ required-features = ["standalone"]
 # (`--au2` for AU v2 only, `--au3`, `--aax`) or per build
 # (enable the feature explicitly).
 default = ["clap", "vst3", "lv2", "standalone"]
-clap = ["dep:truce-clap", "dep:clap-sys"]
-vst3 = ["dep:truce-vst3"]
-lv2 = ["dep:truce-lv2"]
+# Per-format features propagate to `truce/<format>` so the meta
+# crate's macro expansion + prelude re-exports gate correctly.
+# Without this, `truce/clap` stays off, `truce::plugin!` doesn't
+# emit the CLAP entry-point symbols, and the host can't find them.
+# Mirrors the example-gain pattern.
+clap = ["dep:truce-clap", "dep:clap-sys", "truce/clap"]
+vst3 = ["dep:truce-vst3", "truce/vst3"]
+lv2 = ["dep:truce-lv2", "truce/lv2"]
 au = ["dep:truce-au"]
 aax = ["dep:truce-aax"]
 shell = ["truce/shell"]
 standalone = ["dep:truce-standalone", "truce-standalone/gui"]
 
 [dependencies]
-truce            = { git = "https://github.com/truce-audio/truce", tag = "v0.40.1" }
-truce-gui        = { git = "https://github.com/truce-audio/truce", tag = "v0.40.1" }
-truce-egui       = { git = "https://github.com/truce-audio/truce", tag = "v0.40.1" }
-truce-core       = { git = "https://github.com/truce-audio/truce", tag = "v0.40.1" }
-truce-dsp        = { git = "https://github.com/truce-audio/truce", tag = "v0.40.1" }
-truce-clap       = { git = "https://github.com/truce-audio/truce", tag = "v0.40.1", optional = true }
-truce-vst3       = { git = "https://github.com/truce-audio/truce", tag = "v0.40.1", optional = true }
-truce-lv2        = { git = "https://github.com/truce-audio/truce", tag = "v0.40.1", optional = true }
-truce-au         = { git = "https://github.com/truce-audio/truce", tag = "v0.40.1", optional = true }
-truce-aax        = { git = "https://github.com/truce-audio/truce", tag = "v0.40.1", optional = true }
-truce-standalone = { git = "https://github.com/truce-audio/truce", tag = "v0.40.1", optional = true }
+# `default-features = false` so iOS / no-default-features builds
+# don't drag in `truce/clap` (and its truce-clap transitive) when
+# only `au` is enabled — truce-clap doesn't have an iOS arm for
+# `parent_ptr` and fails to compile against the iOS SDK.
+truce = { path = "../truce/crates/truce", default-features = false }
+truce-gui = { path = "../truce/crates/truce-gui" }
+truce-egui = { path = "../truce/crates/truce-egui" }
+truce-core = { path = "../truce/crates/truce-core" }
+ringbuf = "0.5"
+truce-clap = { path = "../truce/crates/truce-clap", optional = true }
+truce-vst3 = { path = "../truce/crates/truce-vst3", optional = true }
+truce-lv2 = { path = "../truce/crates/truce-lv2", optional = true }
+truce-au = { path = "../truce/crates/truce-au", optional = true }
+truce-aax = { path = "../truce/crates/truce-aax", optional = true }
+truce-standalone = { path = "../truce/crates/truce-standalone", optional = true }
 clap-sys = { version = "0.5", optional = true }
-egui = "0.31"
+egui = "0.34"
 rustfft = "6"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 libc = "0.2"
 
 [dev-dependencies]
-truce-test = { git = "https://github.com/truce-audio/truce", tag = "v0.40.1" }
+truce-test = { path = "../truce/crates/truce-test" }
 
 [lints.clippy]
 pedantic = { level = "warn", priority = -1 }

@@ -469,6 +469,17 @@ impl FileRegistry {
             let appdata = std::env::var("APPDATA").unwrap_or_default();
             std::path::PathBuf::from(appdata).join("TruceAnalyzer/registry.json")
         }
+        // iOS sandboxes everything inside the app container — `HOME`
+        // resolves to the container, `Library/Application Support`
+        // is the canonical per-app data dir. Cross-process registry
+        // sharing inside an iOS sandbox is messier (would need an
+        // App Group), but the path itself works.
+        #[cfg(target_os = "ios")]
+        {
+            let home = std::env::var("HOME").unwrap_or_default();
+            std::path::PathBuf::from(home)
+                .join("Library/Application Support/TruceAnalyzer/registry.json")
+        }
     }
 
     pub fn load() -> Self {

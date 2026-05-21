@@ -10,7 +10,10 @@ use std::sync::Arc;
 // The analyzer narrows once at the buffer-write site (`.to_f32()`).
 use truce::prelude64m::*;
 use truce_core::cast::{discrete_norm, len_u32};
-use truce_dsp::{AudioTapProducer, audio_tap};
+use ringbuf::{
+    HeapProd, HeapRb,
+    traits::{Observer, Producer, Split},
+};
 use truce_egui::EguiEditor;
 
 use crate::core::{
@@ -71,11 +74,15 @@ pub struct TruceAnalyzer {
     params: Arc<TruceAnalyzerParams>,
     /// Shared spectrum atomics: the worker writes, the editor reads.
     spectrum: Arc<SpectrumData>,
-    /// Audio thread pushes stereo samples here; the worker drains.
-    tap_tx: AudioTapProducer,
+    /// Audio thread pushes interleaved stereo samples here; the worker
+    /// drains. `ringbuf` is sample-oriented, so the buffer holds
+    /// `TAP_CAPACITY_FRAMES * 2` `f32`s. Drop-on-full lives in
+    /// `process()` and is kept frame-aligned so the worker never
+    /// desyncs L/R.
+    tap_tx: HeapProd<f32>,
     /// Scratch for one process block's worth of interleaved stereo.
-    /// Pre-sized in `reset()`; `push_block` is the only realtime-safe
-    /// consumer.
+    /// Pre-sized in `reset()`; `push_stereo_frames` is the only
+    /// realtime-safe consumer.
     scratch: Vec<f32>,
     /// Joined + shut down on drop.
     worker: AnalyzerWorker,
@@ -88,6 +95,18 @@ pub struct TruceAnalyzer {
 /// gap, with drop-on-full providing a safety net if the worker stalls.
 const TAP_CAPACITY_FRAMES: usize = 32 * 1024;
 
+/// Push interleaved stereo samples into `tap_tx`, never splitting a
+/// frame. The buffer is sample-typed, so a naive `push_slice` could
+/// drop an odd number of samples when the consumer is stalled, which
+/// would desync L/R for every subsequent frame. Rounding the vacant
+/// window down to an even count keeps drop-on-full frame-aligned.
+fn push_stereo_frames(tap_tx: &mut HeapProd<f32>, samples: &[f32]) {
+    debug_assert!(samples.len().is_multiple_of(2), "scratch is always paired L,R");
+    let vacant_aligned = tap_tx.vacant_len() & !1;
+    let push_len = samples.len().min(vacant_aligned);
+    let _ = tap_tx.push_slice(&samples[..push_len]);
+}
+
 impl TruceAnalyzer {
     pub fn new(params: Arc<TruceAnalyzerParams>) -> Self {
         let freqs = cqt_center_frequencies();
@@ -99,7 +118,8 @@ impl TruceAnalyzer {
         let shmem_writer =
             SharedMemoryWriter::create(instance_id.0, &instance_name, spectrum.num_bins());
 
-        let (tap_tx, tap_rx) = audio_tap(TAP_CAPACITY_FRAMES, 2);
+        // Interleaved stereo: capacity is frames × 2 samples.
+        let (tap_tx, tap_rx) = HeapRb::<f32>::new(TAP_CAPACITY_FRAMES * 2).split();
         let worker = spawn_analyzer_worker(spectrum.clone(), tap_rx, shmem_writer);
 
         let mut file_reg = FileRegistry::load();
@@ -137,7 +157,7 @@ impl PluginLogic for TruceAnalyzer {
         self.params.set_sample_rate(sr);
         // Size the push scratch to one block of interleaved stereo. A
         // one-block margin lets us push the entire process() block in
-        // a single `push_block` call and keeps `Vec::clear` cheap.
+        // a single `push_slice` call and keeps `Vec::clear` cheap.
         if self.scratch.capacity() < bs * 2 {
             self.scratch = Vec::with_capacity(bs * 2);
         }
@@ -191,14 +211,14 @@ impl PluginLogic for TruceAnalyzer {
             // sizes. If a host exceeds the last-reset block size we
             // flush early rather than allocate.
             if self.scratch.len() + 2 > self.scratch.capacity() {
-                let _ = self.tap_tx.push_block(&self.scratch, 2);
+                push_stereo_frames(&mut self.tap_tx, &self.scratch);
                 self.scratch.clear();
             }
             self.scratch.push(left);
             self.scratch.push(right);
         }
         if !self.scratch.is_empty() {
-            let _ = self.tap_tx.push_block(&self.scratch, 2);
+            push_stereo_frames(&mut self.tap_tx, &self.scratch);
             self.scratch.clear();
         }
         ProcessStatus::Normal
@@ -225,10 +245,21 @@ impl PluginLogic for TruceAnalyzer {
         let spectrum = self.spectrum.clone();
         let instance_id = self.instance_id;
 
+        // iPhone-portrait hosts (AUM is the canonical one) hand the
+        // plug-in a logical-pixel canvas in the ~375 pt band; the
+        // desktop 800-wide editor would clip on the right with no
+        // way for the host to scroll. Narrowing the iOS variant to
+        // 400 wide keeps the spectrum legible inside AUM's
+        // portrait mixer strip without affecting any other host.
+        #[cfg(target_os = "ios")]
+        let size = (400, 400);
+        #[cfg(not(target_os = "ios"))]
+        let size = (800, 400);
+
         Some(Box::new(
             EguiEditor::with_ui(
                 self.params.clone(),
-                (800, 400),
+                size,
                 AnalyzerEditorUi {
                     ui: UiState::new(spectrum, instance_id),
                 },
@@ -248,11 +279,11 @@ struct AnalyzerEditorUi {
 }
 
 impl truce_egui::EditorUi<TruceAnalyzerParams> for AnalyzerEditorUi {
-    fn ui(&mut self, ctx: &egui::Context, state: &PluginContext<TruceAnalyzerParams>) {
+    fn ui(&mut self, ui: &mut egui::Ui, state: &PluginContext<TruceAnalyzerParams>) {
         self.ui.update_local();
         self.ui.update_remotes();
         self.ui.update_diff();
-        analyzer_ui(ctx, state, &mut self.ui);
+        analyzer_ui(ui, state, &mut self.ui);
     }
 
     fn opened(&mut self, state: &PluginContext<TruceAnalyzerParams>) {
@@ -314,13 +345,14 @@ const GHOST_PALETTE: &[(egui::Color32, egui::Color32)] = &[
 ];
 
 fn analyzer_ui(
-    ctx: &egui::Context,
+    ui: &mut egui::Ui,
     state: &PluginContext<TruceAnalyzerParams>,
     ui_state: &mut UiState,
 ) {
-    draw_header(ctx, state, ui_state);
-    draw_central(ctx, ui_state);
-    ctx.request_repaint_after(std::time::Duration::from_millis(33));
+    draw_header(ui, state, ui_state);
+    draw_central(ui, ui_state);
+    ui.ctx()
+        .request_repaint_after(std::time::Duration::from_millis(33));
 }
 
 // ---------------------------------------------------------------------------
@@ -332,26 +364,36 @@ fn analyzer_ui(
     reason = "header is a single visual concern; splitting fragments the egui layout flow"
 )]
 fn draw_header(
-    ctx: &egui::Context,
+    ui: &mut egui::Ui,
     state: &PluginContext<TruceAnalyzerParams>,
     ui_state: &mut UiState,
 ) {
-    egui::TopBottomPanel::top("header")
-        .exact_height(30.0)
+    egui::Panel::top("header")
+        .exact_size(30.0)
         .frame(egui::Frame::NONE.fill(theme::HEADER_BG))
-        .show(ctx, |ui| {
+        .show_inside(ui, |ui| {
             ui.horizontal_centered(|ui| {
                 ui.add_space(10.0);
 
-                // Fixed title + editable instance name
-                ui.label(
-                    egui::RichText::new("Truce Analyzer:")
-                        .size(14.0)
-                        .color(theme::HEADER_TEXT)
-                        .strong(),
-                );
+                // Editable instance name (no fixed product-name
+                // prefix — the host already shows the plug-in name
+                // in its track header, so duplicating it here just
+                // burns horizontal space on iPhone-portrait layouts
+                // where the editor is already width-constrained).
                 if ui_state.editing_name {
-                    let resp = ui.text_edit_singleline(&mut ui_state.instance_name);
+                    // `text_edit_singleline` defaults to expanding
+                    // the full remaining horizontal space, which on
+                    // the narrowed iOS editor (~400 pt) means the
+                    // edit field draws over the right-aligned
+                    // Channel / View dropdowns rendered later in
+                    // the same horizontal row. Cap the width on iOS
+                    // so the field reserves space for them; desktop
+                    // keeps the auto-expanding behaviour because the
+                    // 800 pt editor has room for both.
+                    let edit = egui::TextEdit::singleline(&mut ui_state.instance_name);
+                    #[cfg(target_os = "ios")]
+                    let edit = edit.desired_width(110.0);
+                    let resp = ui.add(edit);
                     if resp.lost_focus() || ui.input(|i| i.key_pressed(egui::Key::Enter)) {
                         ui_state.editing_name = false;
                         registry::rename(ui_state.instance_id, &ui_state.instance_name);
@@ -375,8 +417,9 @@ fn draw_header(
 
                     let dim = |s| egui::RichText::new(s).size(10.0).color(theme::TEXT_DIM);
 
-                    // Channel (hidden when comparison sources are selected)
                     let channel_id: u32 = P::Channel.into();
+
+                    // Channel (hidden when comparison sources are selected)
                     if ui_state.selected_ids.is_empty() {
                         let current_ch = state.format_param(channel_id);
                         let ch_options = ["Sum", "Both", "Left", "Right", "Diff"];
@@ -479,10 +522,10 @@ fn draw_header(
 // Central panel
 // ---------------------------------------------------------------------------
 
-fn draw_central(ctx: &egui::Context, ui_state: &UiState) {
+fn draw_central(ui: &mut egui::Ui, ui_state: &UiState) {
     egui::CentralPanel::default()
         .frame(egui::Frame::NONE.fill(theme::BACKGROUND))
-        .show(ctx, |ui| {
+        .show_inside(ui, |ui| {
             let (response, painter) =
                 ui.allocate_painter(ui.available_size(), egui::Sense::hover());
             let rect = response.rect;

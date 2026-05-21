@@ -21,3 +21,9 @@ fourcc = "TrAn"
 au_tag = "Effects"
 windows_icon = "static/truce-minimal.ico"
 macos_icon = "static/truce-minimal.icns"
+ios_icon_set = "static/truce-minimal.appiconset"
+# Standalone + iOS container drive `process()` from mic input so
+# the spectrum editor updates, but route the plug-in's output to
+# silence — otherwise the analyzer's pass-through loops mic →
+# speakers and forms a feedback howl.
+mute_preview_output = true
