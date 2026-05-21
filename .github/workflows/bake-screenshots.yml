@@ -20,9 +20,9 @@ on:
   workflow_dispatch:
     inputs:
       platforms:
-        description: "Platforms to bake (any combination of macos,windows)"
+        description: "Platforms to bake (any combination of linux,macos,windows)"
         type: string
-        default: "macos,windows"
+        default: "linux,macos,windows"
         required: false
   pull_request:
 
@@ -39,6 +39,40 @@ env:
   BAKE_SCREENSHOTS: "1"
 
 jobs:
+  linux:
+    if: github.event_name != 'workflow_dispatch' || contains(inputs.platforms, 'linux')
+    name: bake (ubuntu-24.04)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: bake-ubuntu-24.04
+
+      - name: Linux system deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential pkg-config \
+            libx11-dev libx11-xcb-dev libxcb1-dev libxcb-dri2-0-dev libxcb-icccm4-dev libxcursor-dev \
+            libxkbcommon-dev libxkbcommon-x11-dev libxrandr-dev \
+            libgl1-mesa-dev libvulkan-dev mesa-vulkan-drivers \
+            libasound2-dev libjack-jackd2-dev \
+            libfontconfig1-dev libfreetype-dev
+
+      - name: Bake screenshots
+        run: cargo test --release --all-features --lib -- tests::gui_screenshot
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: baked-screenshots-linux
+          path: screenshots/*_linux.png
+          if-no-files-found: error
+          retention-days: 30
+
   macos:
     if: github.event_name != 'workflow_dispatch' || contains(inputs.platforms, 'macos')
     name: bake (macos-14)
@@ -46,7 +80,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: dtolnay/rust-toolchain@1.90
+      - uses: dtolnay/rust-toolchain@stable
 
       - uses: Swatinem/rust-cache@v2
         with:
@@ -69,7 +103,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: dtolnay/rust-toolchain@1.90
+      - uses: dtolnay/rust-toolchain@stable
 
       - uses: Swatinem/rust-cache@v2
         with:
