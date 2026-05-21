@@ -1,6 +1,6 @@
 [package]
 name = "truce-analyzer"
-version = "0.48.1"
+version = "0.48.2"
 edition = "2024"
 
 [lib]
@@ -39,19 +39,19 @@ standalone = ["dep:truce-standalone", "truce-standalone/gui"]
 # only `au` is enabled — truce-clap doesn't have an iOS arm for
 # `parent_ptr` and fails to compile against the iOS SDK.
 # truce crates aren't on crates.io yet — pull from the github repo at
-# the v0.48.1 tag. Swap each to `version = "0.48.1"` once they're
+# the v0.48.2 tag. Swap each to `version = "0.48.2"` once they're
 # published.
-truce = { git = "https://github.com/truce-audio/truce.git", tag = "v0.48.1", default-features = false }
-truce-gui = { git = "https://github.com/truce-audio/truce.git", tag = "v0.48.1" }
-truce-egui = { git = "https://github.com/truce-audio/truce.git", tag = "v0.48.1" }
-truce-core = { git = "https://github.com/truce-audio/truce.git", tag = "v0.48.1" }
+truce = { git = "https://github.com/truce-audio/truce.git", tag = "v0.48.2", default-features = false }
+truce-gui = { git = "https://github.com/truce-audio/truce.git", tag = "v0.48.2" }
+truce-egui = { git = "https://github.com/truce-audio/truce.git", tag = "v0.48.2" }
+truce-core = { git = "https://github.com/truce-audio/truce.git", tag = "v0.48.2" }
 ringbuf = "0.5"
-truce-clap = { git = "https://github.com/truce-audio/truce.git", tag = "v0.48.1", optional = true }
-truce-vst3 = { git = "https://github.com/truce-audio/truce.git", tag = "v0.48.1", optional = true }
-truce-lv2 = { git = "https://github.com/truce-audio/truce.git", tag = "v0.48.1", optional = true }
-truce-au = { git = "https://github.com/truce-audio/truce.git", tag = "v0.48.1", optional = true }
-truce-aax = { git = "https://github.com/truce-audio/truce.git", tag = "v0.48.1", optional = true }
-truce-standalone = { git = "https://github.com/truce-audio/truce.git", tag = "v0.48.1", optional = true }
+truce-clap = { git = "https://github.com/truce-audio/truce.git", tag = "v0.48.2", optional = true }
+truce-vst3 = { git = "https://github.com/truce-audio/truce.git", tag = "v0.48.2", optional = true }
+truce-lv2 = { git = "https://github.com/truce-audio/truce.git", tag = "v0.48.2", optional = true }
+truce-au = { git = "https://github.com/truce-audio/truce.git", tag = "v0.48.2", optional = true }
+truce-aax = { git = "https://github.com/truce-audio/truce.git", tag = "v0.48.2", optional = true }
+truce-standalone = { git = "https://github.com/truce-audio/truce.git", tag = "v0.48.2", optional = true }
 clap-sys = { version = "0.5", optional = true }
 egui = "0.34"
 rustfft = "6"
@@ -60,7 +60,7 @@ serde_json = "1"
 libc = "0.2"
 
 [dev-dependencies]
-truce-test = { git = "https://github.com/truce-audio/truce.git", tag = "v0.48.1" }
+truce-test = { git = "https://github.com/truce-audio/truce.git", tag = "v0.48.2" }
 
 [lints.clippy]
 pedantic = { level = "warn", priority = -1 }
