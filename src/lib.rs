@@ -8,12 +8,12 @@ use std::sync::Arc;
 // Mode 2: audio buffer stays at the host's `f32` wire format but
 // `param.read()` returns `f64` for stable intermediate gain math.
 // The analyzer narrows once at the buffer-write site (`.to_f32()`).
-use truce::prelude64m::*;
-use truce_core::cast::{discrete_norm, len_u32};
 use ringbuf::{
     HeapProd, HeapRb,
     traits::{Observer, Producer, Split},
 };
+use truce::prelude64m::*;
+use truce_core::cast::{discrete_norm, len_u32};
 use truce_egui::EguiEditor;
 
 use crate::core::{
@@ -101,7 +101,10 @@ const TAP_CAPACITY_FRAMES: usize = 32 * 1024;
 /// would desync L/R for every subsequent frame. Rounding the vacant
 /// window down to an even count keeps drop-on-full frame-aligned.
 fn push_stereo_frames(tap_tx: &mut HeapProd<f32>, samples: &[f32]) {
-    debug_assert!(samples.len().is_multiple_of(2), "scratch is always paired L,R");
+    debug_assert!(
+        samples.len().is_multiple_of(2),
+        "scratch is always paired L,R"
+    );
     let vacant_aligned = tap_tx.vacant_len() & !1;
     let push_len = samples.len().min(vacant_aligned);
     let _ = tap_tx.push_slice(&samples[..push_len]);

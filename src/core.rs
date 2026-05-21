@@ -3,11 +3,11 @@ use std::sync::{Arc, mpsc};
 use std::thread;
 use std::time::Duration;
 
+use ringbuf::{HeapCons, traits::Consumer};
 use rustfft::num_complex::Complex;
 use rustfft::{Fft, FftPlanner};
 use truce_core::Float;
 use truce_core::cast::sample_count_usize;
-use ringbuf::{HeapCons, traits::Consumer};
 
 use crate::shmem::SharedMemoryWriter;
 
