@@ -21,20 +21,6 @@ Three view modes:
 
 You can also select multiple sources to compare against several points in your chain at once.
 
-## Controls
-
-| Control | Location | Description |
-|---------|----------|-------------|
-| **Instance name** | Header, left | Double-click to rename. Persists across save/load. |
-| **Source** | Header, right | Select other instances to compare against. |
-| **View** | Header, right | Normal / Diff / Both. Only visible when a source is selected. |
-| **Channel** | Header, right | Sum / Both / Left / Right / Diff (M/S side). Hidden when comparing. |
-| **Hover** | Spectrum area | Shows frequency, amplitude per signal, and diff at cursor. |
-
-## Formats
-
-CLAP and VST3 ship on every platform; AU v2 ships on macOS, LV2 ships on Linux. Works in any DAW that supports these formats. AU v3 and AAX builds are gated behind their respective signing setups and not part of the default release.
-
 ## License
 
 Licensed under either of [Apache License, Version 2.0](LICENSE-APACHE) or [MIT License](LICENSE-MIT) at your option.
