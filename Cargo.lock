@@ -112,9 +112,10 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c08606f8c3cbf4ce6ec8e28fb0014a2c086708fe954eaa885384a6165172e7e8"
 
 [[package]]
-name = "baseview"
-version = "0.1.1"
-source = "git+https://github.com/truce-audio/baseview.git#ed5d57b0379495e7a75f0bde77c647a40f860aac"
+name = "baseview-truce"
+version = "0.1.1-truce.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c313f8aee0cd037d0dad66ecf0672ed3afe25110c59a4148535b1f48e455a69d"
 dependencies = [
  "keyboard-types",
  "nix",
@@ -156,6 +157,9 @@ name = "bitflags"
 version = "2.11.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c4512299f36f043ab09a583e57bceb5a5aab7a73db1805848e8fef3c9e8c78b3"
+dependencies = [
+ "serde_core",
+]
 
 [[package]]
 name = "block"
@@ -577,12 +581,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "float_next_after"
-version = "1.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8bf7cc16383c4b8d58b9905a8509f02926ce3058053c056376248d958c9df1e8"
-
-[[package]]
 name = "foldhash"
 version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -844,11 +842,11 @@ dependencies = [
 
 [[package]]
 name = "keyboard-types"
-version = "0.6.2"
+version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0b7668b7cff6a51fe61cdde64cd27c8a220786f399501b57ebe36f7d8112fd68"
+checksum = "b750dcadc39a09dbadd74e118f6dd6598df77fa01df0cfcdc52c28dece74528a"
 dependencies = [
- "bitflags 1.3.2",
+ "bitflags 2.11.1",
  "serde",
  "unicode-segmentation",
 ]
@@ -955,38 +953,6 @@ name = "log"
 version = "0.4.29"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5e5032e24019045c762d3c0f28f5b6b8bbf38563a65908389bf7978758920897"
-
-[[package]]
-name = "lyon_geom"
-version = "1.0.19"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4336502e29e32af93cf2dad2214ed6003c17ceb5bd499df77b1de663b9042b92"
-dependencies = [
- "arrayvec",
- "euclid",
- "num-traits",
-]
-
-[[package]]
-name = "lyon_path"
-version = "1.0.19"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5c463f9c428b7fc5ec885dcd39ce4aa61e29111d0e33483f6f98c74e89d8621e"
-dependencies = [
- "lyon_geom",
- "num-traits",
-]
-
-[[package]]
-name = "lyon_tessellation"
-version = "1.0.20"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8e43b7e44161571868f5c931d12583592c223c5583eef86b08aa02b7048a3552"
-dependencies = [
- "float_next_after",
- "lyon_path",
- "num-traits",
-]
 
 [[package]]
 name = "mach2"
@@ -2037,32 +2003,42 @@ dependencies = [
 
 [[package]]
 name = "truce"
-version = "0.48.4"
-source = "git+https://github.com/truce-audio/truce.git?tag=v0.48.4#4f7271e2735b824df8f61928c9bf92d0194704ab"
+version = "0.52.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "70630b0e87a75f61212d308218ee3c70ffa6d22b171073dbd35e978086ac202e"
 dependencies = [
  "truce-clap",
  "truce-core",
  "truce-derive",
- "truce-gui",
+ "truce-gui-types",
  "truce-loader",
  "truce-lv2",
  "truce-params",
+ "truce-plugin",
  "truce-vst3",
 ]
 
 [[package]]
 name = "truce-aax"
-version = "0.48.4"
-source = "git+https://github.com/truce-audio/truce.git?tag=v0.48.4#4f7271e2735b824df8f61928c9bf92d0194704ab"
+version = "0.52.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5f01d38b1335aad1ebe53113bb48c8d6156e9c1bd9d4719e858fa972c2c6cf24"
 dependencies = [
  "crossbeam-queue",
+ "truce-aax-bridge",
  "truce-core",
  "truce-params",
 ]
 
 [[package]]
+name = "truce-aax-bridge"
+version = "0.52.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b87dd3fd7bc65c12b9445008ea7365e56cdc1b9d60bd30a571d58d626c529d9b"
+
+[[package]]
 name = "truce-analyzer"
-version = "0.48.4"
+version = "0.52.0"
 dependencies = [
  "clap-sys",
  "egui",
@@ -2086,8 +2062,9 @@ dependencies = [
 
 [[package]]
 name = "truce-au"
-version = "0.48.4"
-source = "git+https://github.com/truce-audio/truce.git?tag=v0.48.4#4f7271e2735b824df8f61928c9bf92d0194704ab"
+version = "0.52.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c50beb2f6a4e1e97d169b912ab54729490aa9353129808fc8bea8a71d14b1652"
 dependencies = [
  "cc",
  "crossbeam-queue",
@@ -2098,8 +2075,9 @@ dependencies = [
 
 [[package]]
 name = "truce-build"
-version = "0.48.4"
-source = "git+https://github.com/truce-audio/truce.git?tag=v0.48.4#4f7271e2735b824df8f61928c9bf92d0194704ab"
+version = "0.52.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "59b8c1ffc94b6105a5d5d5c8d3d90281d6d2d0abb4cbc9bde8cb0c0277222127"
 dependencies = [
  "serde",
  "toml",
@@ -2107,8 +2085,9 @@ dependencies = [
 
 [[package]]
 name = "truce-clap"
-version = "0.48.4"
-source = "git+https://github.com/truce-audio/truce.git?tag=v0.48.4#4f7271e2735b824df8f61928c9bf92d0194704ab"
+version = "0.52.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "46c081e682b1d181c5946af564dc70956b227b9d4a62b40655f25741739f0d84"
 dependencies = [
  "clap-sys",
  "crossbeam-queue",
@@ -2118,8 +2097,9 @@ dependencies = [
 
 [[package]]
 name = "truce-core"
-version = "0.48.4"
-source = "git+https://github.com/truce-audio/truce.git?tag=v0.48.4#4f7271e2735b824df8f61928c9bf92d0194704ab"
+version = "0.52.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bf6e1288cda9c40733c014ee1ba8f8671376d392cc44cbd57c59ee8be77a8734"
 dependencies = [
  "png",
  "truce-params",
@@ -2127,9 +2107,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "truce-cpu"
+version = "0.52.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0874aeb9026b247ea4f762d84142bcfb7b504e4e7626dbcd5673f76ef95bf326"
+dependencies = [
+ "fontdue",
+ "tiny-skia",
+ "truce-core",
+ "truce-font",
+ "truce-gui-types",
+]
+
+[[package]]
 name = "truce-derive"
-version = "0.48.4"
-source = "git+https://github.com/truce-audio/truce.git?tag=v0.48.4#4f7271e2735b824df8f61928c9bf92d0194704ab"
+version = "0.52.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "555a8e1abca906dfd07daf6eb5e725c181ae15549f7e489ef078dcd72b8d9263"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -2142,8 +2136,9 @@ dependencies = [
 
 [[package]]
 name = "truce-driver"
-version = "0.48.4"
-source = "git+https://github.com/truce-audio/truce.git?tag=v0.48.4#4f7271e2735b824df8f61928c9bf92d0194704ab"
+version = "0.52.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8a54f05addc01766038b4a239f8c60741380c1cfe9ff8faf6002bed1905b1d5f"
 dependencies = [
  "truce-core",
  "truce-params",
@@ -2151,10 +2146,11 @@ dependencies = [
 
 [[package]]
 name = "truce-egui"
-version = "0.48.4"
-source = "git+https://github.com/truce-audio/truce.git?tag=v0.48.4#4f7271e2735b824df8f61928c9bf92d0194704ab"
+version = "0.52.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0764e9a1d74331b0c63c70d8f499d99436b0352c8c7e81e479c0c082019269d5"
 dependencies = [
- "baseview",
+ "baseview-truce",
  "egui",
  "egui-wgpu",
  "keyboard-types",
@@ -2172,33 +2168,17 @@ dependencies = [
 
 [[package]]
 name = "truce-font"
-version = "0.48.4"
-source = "git+https://github.com/truce-audio/truce.git?tag=v0.48.4#4f7271e2735b824df8f61928c9bf92d0194704ab"
-
-[[package]]
-name = "truce-gpu"
-version = "0.48.4"
-source = "git+https://github.com/truce-audio/truce.git?tag=v0.48.4#4f7271e2735b824df8f61928c9bf92d0194704ab"
-dependencies = [
- "baseview",
- "bytemuck",
- "fontdue",
- "lyon_tessellation",
- "pollster",
- "raw-window-handle 0.5.2",
- "truce-core",
- "truce-gui",
- "truce-params",
- "wgpu",
-]
+version = "0.52.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "51e32bc2ca7869187a3b06412abd81b04ccc6f448068715bad8105e2d784451c"
 
 [[package]]
 name = "truce-gui"
-version = "0.48.4"
-source = "git+https://github.com/truce-audio/truce.git?tag=v0.48.4#4f7271e2735b824df8f61928c9bf92d0194704ab"
+version = "0.52.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "953017cf9bc1a720cfb4cfa46146cd6e33651eb6610547bf8dd9955b2b88265e"
 dependencies = [
- "baseview",
- "fontdue",
+ "baseview-truce",
  "log",
  "objc",
  "objc2",
@@ -2207,9 +2187,8 @@ dependencies = [
  "objc2-ui-kit",
  "pollster",
  "raw-window-handle 0.5.2",
- "tiny-skia",
  "truce-core",
- "truce-font",
+ "truce-cpu",
  "truce-gui-types",
  "truce-params",
  "truce-plugin",
@@ -2218,8 +2197,9 @@ dependencies = [
 
 [[package]]
 name = "truce-gui-types"
-version = "0.48.4"
-source = "git+https://github.com/truce-audio/truce.git?tag=v0.48.4#4f7271e2735b824df8f61928c9bf92d0194704ab"
+version = "0.52.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0287427622b272a9b80d4b668d31c0d46a7fbb792ebc7719beca89e36bdf596a"
 dependencies = [
  "objc2",
  "truce-core",
@@ -2227,23 +2207,25 @@ dependencies = [
 
 [[package]]
 name = "truce-loader"
-version = "0.48.4"
-source = "git+https://github.com/truce-audio/truce.git?tag=v0.48.4#4f7271e2735b824df8f61928c9bf92d0194704ab"
+version = "0.52.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "375170bcbb068990331c72697fd8ed879bcbd0b76ccace2398e5b3e652d7c012"
 dependencies = [
  "crc32fast",
  "libloading 0.9.0",
  "log",
  "parking_lot",
  "truce-core",
- "truce-gpu",
- "truce-gui",
+ "truce-gui-types",
  "truce-params",
+ "truce-plugin",
 ]
 
 [[package]]
 name = "truce-lv2"
-version = "0.48.4"
-source = "git+https://github.com/truce-audio/truce.git?tag=v0.48.4#4f7271e2735b824df8f61928c9bf92d0194704ab"
+version = "0.52.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "74c99997ac847181802be023733bcc81ee9da800ad99eecb36866eceef6e5f0d"
 dependencies = [
  "objc",
  "truce-build",
@@ -2253,16 +2235,18 @@ dependencies = [
 
 [[package]]
 name = "truce-params"
-version = "0.48.4"
-source = "git+https://github.com/truce-audio/truce.git?tag=v0.48.4#4f7271e2735b824df8f61928c9bf92d0194704ab"
+version = "0.52.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b333bb124ad254b0382792f504c541a762e24415024d0c68a5934c5960734869"
 dependencies = [
  "bitflags 2.11.1",
 ]
 
 [[package]]
 name = "truce-plugin"
-version = "0.48.4"
-source = "git+https://github.com/truce-audio/truce.git?tag=v0.48.4#4f7271e2735b824df8f61928c9bf92d0194704ab"
+version = "0.52.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fa97dec0a242cfa030b37d114b4d74994d88ceb110494058d98d471a8957ca4e"
 dependencies = [
  "truce-core",
  "truce-gui-types",
@@ -2271,15 +2255,17 @@ dependencies = [
 
 [[package]]
 name = "truce-shim-types"
-version = "0.48.4"
-source = "git+https://github.com/truce-audio/truce.git?tag=v0.48.4#4f7271e2735b824df8f61928c9bf92d0194704ab"
+version = "0.52.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a730a7e064d9ff2543109ca7d169387a71d0df092bd14997cfd0c85fafb515d3"
 
 [[package]]
 name = "truce-standalone"
-version = "0.48.4"
-source = "git+https://github.com/truce-audio/truce.git?tag=v0.48.4#4f7271e2735b824df8f61928c9bf92d0194704ab"
+version = "0.52.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "05011db568a0f86d4b584fa0cb29a8db4f2e7b6321f5e6d2d13aafdbb3c7427a"
 dependencies = [
- "baseview",
+ "baseview-truce",
  "cpal",
  "crossbeam-queue",
  "dirs",
@@ -2290,7 +2276,6 @@ dependencies = [
  "raw-window-handle 0.5.2",
  "rfd",
  "truce-core",
- "truce-gpu",
  "truce-gui",
  "truce-params",
  "windows-sys 0.61.2",
@@ -2299,8 +2284,9 @@ dependencies = [
 
 [[package]]
 name = "truce-test"
-version = "0.48.4"
-source = "git+https://github.com/truce-audio/truce.git?tag=v0.48.4#4f7271e2735b824df8f61928c9bf92d0194704ab"
+version = "0.52.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d57835bae52a58f419b55a65a0ff747d649ed947540bc2841479c0c839c68f4a"
 dependencies = [
  "png",
  "toml",
@@ -2312,13 +2298,15 @@ dependencies = [
 
 [[package]]
 name = "truce-utils"
-version = "0.48.4"
-source = "git+https://github.com/truce-audio/truce.git?tag=v0.48.4#4f7271e2735b824df8f61928c9bf92d0194704ab"
+version = "0.52.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "db058ca17bad7fa9d2ac70e70e2e8aa7d58ff3349966079904e4cae2416e5f7e"
 
 [[package]]
 name = "truce-vst3"
-version = "0.48.4"
-source = "git+https://github.com/truce-audio/truce.git?tag=v0.48.4#4f7271e2735b824df8f61928c9bf92d0194704ab"
+version = "0.52.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "410bebcd509385eec4e6178fe3de5e8074337d7788129f3a27563b3362cc7bd1"
 dependencies = [
  "cc",
  "crossbeam-queue",

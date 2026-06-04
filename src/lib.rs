@@ -244,7 +244,7 @@ impl PluginLogic for TruceAnalyzer {
         }
     }
 
-    fn custom_editor(&self) -> Option<Box<dyn truce_core::editor::Editor>> {
+    fn editor(&self) -> Box<dyn truce_core::editor::Editor> {
         let spectrum = self.spectrum.clone();
         let instance_id = self.instance_id;
 
@@ -259,17 +259,16 @@ impl PluginLogic for TruceAnalyzer {
         #[cfg(not(target_os = "ios"))]
         let size = (800, 400);
 
-        Some(Box::new(
-            EguiEditor::with_ui(
-                self.params.clone(),
-                size,
-                AnalyzerEditorUi {
-                    ui: UiState::new(spectrum, instance_id),
-                },
-            )
-            .with_visuals(truce_egui::theme::dark())
-            .with_font(truce_gui::font::JETBRAINS_MONO),
-        ))
+        EguiEditor::with_ui(
+            self.params.clone(),
+            size,
+            AnalyzerEditorUi {
+                ui: UiState::new(spectrum, instance_id),
+            },
+        )
+        .with_visuals(truce_egui::theme::dark())
+        .with_font(truce_gui::font::JETBRAINS_MONO)
+        .into_editor()
     }
 }
 
