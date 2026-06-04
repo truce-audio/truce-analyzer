@@ -57,11 +57,14 @@ fi
 # `cargo.exe install` writes to the Windows-side ~/.cargo/bin and
 # `cargo.exe truce package` resolves the subcommand from there, so
 # WSL's own cargo / cargo-truce (if any) is irrelevant.
-echo "==> installing cargo-truce@$truce_version via cargo.exe (crates.io)"
+echo "==> installing cargo-truce@^$truce_version via cargo.exe (crates.io)"
 # `--force` so any stale `cargo-truce.exe` (prior release, dev
 # work) gets replaced rather than silently kept. `cargo install`
 # is a no-op when the binary already exists at the same name.
-cargo.exe install cargo-truce --version "$truce_version" --locked --force
+# `^` prefix so a bare major.minor like `0.52` is accepted as a
+# SemVer range; `cargo install --version` rejects unqualified
+# two-component versions outright.
+cargo.exe install cargo-truce --version "^$truce_version" --locked --force
 
 # --- build installer -----------------------------------------------------
 

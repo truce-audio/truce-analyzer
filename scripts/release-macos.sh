@@ -68,12 +68,15 @@ fi
 
 # --- install cargo-truce -------------------------------------------------
 
-echo "==> installing cargo-truce@$truce_version (crates.io)"
+echo "==> installing cargo-truce@^$truce_version (crates.io)"
 # `--force` so an already-installed `cargo-truce` (from a previous
 # release run or local dev work) is replaced rather than silently
 # kept at the old version. `cargo install` is a no-op when the
 # binary already exists, regardless of the requested version.
-cargo install cargo-truce --version "$truce_version" --locked --force
+# `^` prefix so a bare major.minor like `0.52` is accepted as a
+# SemVer range; `cargo install --version` rejects unqualified
+# two-component versions outright.
+cargo install cargo-truce --version "^$truce_version" --locked --force
 
 # --- build installer -----------------------------------------------------
 
