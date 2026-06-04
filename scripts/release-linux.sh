@@ -24,15 +24,15 @@ cd "$(git rev-parse --show-toplevel)"
 # --- parse versions from Cargo.toml --------------------------------------
 
 pkg_version=$(awk -F\" '/^version[[:space:]]*=/ { print $2; exit }' Cargo.toml)
-truce_tag=$(sed -n 's/^truce[[:space:]]\{1,\}=.*tag[[:space:]]*=[[:space:]]*"\([^"]*\)".*/\1/p' Cargo.toml | head -1)
+truce_version=$(sed -n 's/^truce[[:space:]]\{1,\}=.*version[[:space:]]*=[[:space:]]*"\([^"]*\)".*/\1/p' Cargo.toml | head -1)
 
-if [[ -z "$pkg_version" || -z "$truce_tag" ]]; then
-    echo "could not parse package version or truce tag from Cargo.toml" >&2
+if [[ -z "$pkg_version" || -z "$truce_version" ]]; then
+    echo "could not parse package version or truce version from Cargo.toml" >&2
     exit 1
 fi
 
 release_tag="v$pkg_version"
-echo "==> release tag: $release_tag (truce $truce_tag)"
+echo "==> release tag: $release_tag (truce $truce_version)"
 
 # --- preflight -----------------------------------------------------------
 
@@ -59,12 +59,11 @@ fi
 
 # --- install cargo-truce -------------------------------------------------
 
-echo "==> installing cargo-truce@$truce_tag"
+echo "==> installing cargo-truce@$truce_version (crates.io)"
 # `--force` so any stale `cargo-truce` (prior release, dev work)
 # gets replaced rather than silently kept. `cargo install` is a
 # no-op when the binary already exists at the same name.
-cargo install cargo-truce --git https://github.com/truce-audio/truce \
-    --tag "$truce_tag" --locked --force
+cargo install cargo-truce --version "$truce_version" --locked --force
 
 # --- build installer -----------------------------------------------------
 
