@@ -268,6 +268,16 @@ impl PluginLogic for TruceAnalyzer {
         )
         .with_visuals(truce_egui::theme::dark())
         .with_font(truce_gui::font::JETBRAINS_MONO)
+        // Floor at 500x250 so the dB axis labels and kHz markers
+        // stay legible; ceiling lets a 4K display open the
+        // spectrum edge-to-edge. `EguiRenderer::resize` clamps
+        // the physical extent against the adapter-reported
+        // `max_texture_dimension_2d`, so even if the host pushes
+        // past the GPU limit we land at the highest supported
+        // size instead of panicking inside `surface.configure`.
+        .resizable(true)
+        .min_size((500, 250))
+        .max_size((3840, 2160))
         .into_editor()
     }
 }
