@@ -69,7 +69,20 @@ jobs:
       # Release mode keeps CQT kernel generation fast enough for the
       # screenshot tests (debug is ~16x slower at 22.05 kHz).
       - name: test
+        if: matrix.os != 'windows'
         run: cargo test --release --all-features
+
+      # `windows-latest` runners have no GPU, so truce-egui's headless
+      # screenshot renders through the WARP software DX12 adapter. Under
+      # truce 1.0.1's wgpu 29 stack that path segfaults
+      # (STATUS_ACCESS_VIOLATION) on the analyzer's heavy spectrum mesh —
+      # a software-rasterizer crash that can't be caught (no unwind) or
+      # re-baked (the render dies before producing pixels). Skip the
+      # screenshot tests on Windows; macOS + Linux still gate them.
+      # Re-enable once the framework's WARP render path is fixed.
+      - name: test (Windows — skip GPU screenshot tests)
+        if: matrix.os == 'windows'
+        run: cargo test --release --all-features -- --skip gui_screenshot
 
       - name: upload failing screenshots
         if: failure()
