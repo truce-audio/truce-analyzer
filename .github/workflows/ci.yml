@@ -1,0 +1,94 @@
+name: CI
+
+# Validation pipeline — runs on every push to `main` and every PR.
+# Catches build breakage, lint regressions, and test failures before
+# they reach a release tag.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: 0
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: ${{ matrix.label }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - label: macOS (arm64)
+            runner: macos-14
+            os: macos
+          - label: Windows (x86_64)
+            runner: windows-latest
+            os: windows
+          - label: Linux (x86_64)
+            runner: ubuntu-24.04
+            os: linux
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.runner }}-ci
+
+      # Audio / windowing / GPU dev headers the framework links
+      # against — same list `truce` uses in its own Linux CI.
+      - name: Linux system deps
+        if: matrix.os == 'linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential pkg-config \
+            libx11-dev libx11-xcb-dev libxcb1-dev libxcb-dri2-0-dev libxcb-icccm4-dev libxcursor-dev \
+            libxkbcommon-dev libxkbcommon-x11-dev libxrandr-dev \
+            libgl1-mesa-dev libvulkan-dev mesa-vulkan-drivers \
+            libasound2-dev libjack-jackd2-dev \
+            libfontconfig1-dev libfreetype-dev
+
+      - name: clippy (pedantic)
+        run: cargo clippy --all-features --all-targets -- -D warnings
+
+      # Release mode keeps CQT kernel generation fast enough for the
+      # screenshot tests (debug is ~16x slower at 22.05 kHz).
+      - name: test
+        if: matrix.os != 'windows'
+        run: cargo test --release --all-features
+
+      # `windows-latest` runners have no GPU, so truce-egui's headless
+      # screenshot renders through the WARP software DX12 adapter. Under
+      # truce 1.0.1's wgpu 29 stack that path segfaults
+      # (STATUS_ACCESS_VIOLATION) on the analyzer's heavy spectrum mesh —
+      # a software-rasterizer crash that can't be caught (no unwind) or
+      # re-baked (the render dies before producing pixels). Skip the
+      # screenshot tests on Windows; macOS + Linux still gate them.
+      # Re-enable once the framework's WARP render path is fixed.
+      - name: test (Windows — skip GPU screenshot tests)
+        if: matrix.os == 'windows'
+        run: cargo test --release --all-features -- --skip gui_screenshot
+
+      - name: upload failing screenshots
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: failing-screenshots-${{ matrix.runner }}
+          path: target/screenshots/
+          if-no-files-found: ignore
+          retention-days: 14
