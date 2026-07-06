@@ -2093,7 +2093,7 @@ checksum = "66916425e6fe41a51f01453a5a9cc85cb339331660c7d13939e92a28cb81cc4d"
 
 [[package]]
 name = "truce-analyzer"
-version = "2.0.1"
+version = "3.0.0"
 dependencies = [
  "clap-sys",
  "egui",
