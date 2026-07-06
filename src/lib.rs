@@ -3,7 +3,7 @@ mod registry;
 mod shmem;
 mod ui_state;
 
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 
 // Mode 2: audio buffer stays at the host's `f32` wire format but
 // `param.read()` returns `f64` for stable intermediate gain math.
@@ -50,6 +50,15 @@ impl ChannelMode {
     }
 }
 
+/// Plugin-owned state the receiverless `editor(params)` needs but that
+/// isn't a parameter: the live spectrum the worker writes and this
+/// instance's registry id. `TruceAnalyzer::new` fills it (see the
+/// `#[skip]` field on the params below).
+struct EditorBridge {
+    spectrum: Arc<SpectrumData>,
+    instance_id: InstanceId,
+}
+
 #[derive(Params)]
 pub struct TruceAnalyzerParams {
     #[param(
@@ -62,6 +71,12 @@ pub struct TruceAnalyzerParams {
 
     #[param(name = "Channel")]
     pub channel: EnumParam<ChannelMode>,
+
+    /// Shared editor bridge. `#[skip]` = not a parameter: the plugin
+    /// populates it in `new()` so the receiverless `editor(params)` can
+    /// reach the spectrum + instance id through the shared `Arc<Params>`.
+    #[skip]
+    editor_bridge: Arc<OnceLock<EditorBridge>>,
 }
 
 use TruceAnalyzerParamsParamId as P;
@@ -118,6 +133,13 @@ impl TruceAnalyzer {
         let instance_id = registry::register(None, spectrum.clone());
         let instance_name = registry::name_of(instance_id).unwrap_or_default();
 
+        // Hand the spectrum + id to the shared params so the
+        // receiverless `editor(params)` can build the GUI without `self`.
+        let _ = params.editor_bridge.set(EditorBridge {
+            spectrum: spectrum.clone(),
+            instance_id,
+        });
+
         let shmem_writer =
             SharedMemoryWriter::create(instance_id.0, &instance_name, spectrum.num_bins());
 
@@ -152,6 +174,8 @@ impl Drop for TruceAnalyzer {
 }
 
 impl PluginLogic for TruceAnalyzer {
+    type Params = TruceAnalyzerParams;
+
     fn bus_layouts() -> Vec<BusLayout> {
         vec![BusLayout::stereo()]
     }
@@ -244,9 +268,14 @@ impl PluginLogic for TruceAnalyzer {
         }
     }
 
-    fn editor(&self) -> Box<dyn truce_core::editor::Editor> {
-        let spectrum = self.spectrum.clone();
-        let instance_id = self.instance_id;
+    fn editor(params: Arc<TruceAnalyzerParams>) -> Box<dyn truce_core::editor::Editor> {
+        // The plugin's `new()` populated this before any editor can open.
+        let bridge = params
+            .editor_bridge
+            .get()
+            .expect("editor built before the plugin instance was constructed");
+        let spectrum = bridge.spectrum.clone();
+        let instance_id = bridge.instance_id;
 
         // iPhone-portrait hosts (AUM is the canonical one) hand the
         // plug-in a logical-pixel canvas in the ~375 pt band; the
@@ -260,7 +289,7 @@ impl PluginLogic for TruceAnalyzer {
         let size = (800, 400);
 
         EguiEditor::with_ui(
-            self.params.clone(),
+            params.clone(),
             size,
             AnalyzerEditorUi {
                 ui: UiState::new(spectrum, instance_id),

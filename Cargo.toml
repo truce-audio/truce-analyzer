@@ -38,17 +38,17 @@ standalone = ["dep:truce-standalone", "truce-standalone/gui"]
 # don't drag in `truce/clap` (and its truce-clap transitive) when
 # only `au` is enabled — truce-clap doesn't have an iOS arm for
 # `parent_ptr` and fails to compile against the iOS SDK.
-truce = { version = "2.0.1", default-features = false }
-truce-gui = "2.0.1"
-truce-egui = "2.0.1"
-truce-core = "2.0.1"
+truce = { version = "3.0", default-features = false }
+truce-gui = "3.0"
+truce-egui = "3.0"
+truce-core = "3.0"
 ringbuf = "0.5"
-truce-clap = { version = "2.0.1", optional = true }
-truce-vst3 = { version = "2.0.1", optional = true }
-truce-lv2 = { version = "2.0.1", optional = true }
-truce-au = { version = "2.0.1", optional = true }
-truce-aax = { version = "2.0.1", optional = true }
-truce-standalone = { version = "2.0.1", optional = true }
+truce-clap = { version = "3.0", optional = true }
+truce-vst3 = { version = "3.0", optional = true }
+truce-lv2 = { version = "3.0", optional = true }
+truce-au = { version = "3.0", optional = true }
+truce-aax = { version = "3.0", optional = true }
+truce-standalone = { version = "3.0", optional = true }
 clap-sys = { version = "0.5", optional = true }
 egui = "0.34"
 rustfft = "6"
@@ -57,7 +57,7 @@ serde_json = "1"
 libc = "0.2"
 
 [dev-dependencies]
-truce-test = "2.0.1"
+truce-test = "3.0"
 
 [lints.clippy]
 pedantic = { level = "warn", priority = -1 }

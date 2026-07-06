@@ -59,8 +59,9 @@ pub struct PersistentState {
 }
 
 impl StateTrait for PersistentState {
-    fn serialize(&self) -> Vec<u8> {
-        serde_json::to_vec(self).unwrap_or_default()
+    fn serialize_into(&self, buf: &mut Vec<u8>) {
+        buf.clear();
+        let _ = serde_json::to_writer(&mut *buf, self);
     }
 
     fn deserialize(data: &[u8]) -> Option<Self> {
