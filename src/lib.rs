@@ -341,6 +341,8 @@ truce::plugin! {
     params: TruceAnalyzerParams,
 }
 
+truce::enable_rt_paranoid!();
+
 // ---------------------------------------------------------------------------
 // UI
 // ---------------------------------------------------------------------------
@@ -1025,6 +1027,18 @@ mod tests {
             .input(InputSource::Constant(0.5))
             .run();
         assert_no_nans(&result);
+    }
+
+    /// `process` makes no allocation, free, or truce-typed lock on the audio
+    /// thread. Meaningful under `--features rt-paranoid`; vacuous otherwise.
+    #[test]
+    fn process_is_realtime_clean() {
+        truce_test::assert_realtime_clean(|| {
+            driver!(Plugin)
+                .duration(Duration::from_millis(50))
+                .input(InputSource::Constant(0.5))
+                .run()
+        });
     }
 
     /// Build a headless `EguiEditor` wrapping a pre-populated `UiState` and
