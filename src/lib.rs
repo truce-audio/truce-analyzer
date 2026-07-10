@@ -3,23 +3,20 @@ mod registry;
 mod shmem;
 mod ui_state;
 
+use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::{Arc, OnceLock};
 
 // Mode 2: audio buffer stays at the host's `f32` wire format but
 // `param.read()` returns `f64` for stable intermediate gain math.
 // The analyzer narrows once at the buffer-write site (`.to_f32()`).
-use ringbuf::{
-    HeapProd, HeapRb,
-    traits::{Observer, Producer, Split},
-};
 use truce::prelude64m::*;
 use truce_core::cast::{discrete_norm, len_u32};
 use truce_egui::EguiEditor;
 
 use crate::core::{
-    AnalyzerWorker, DB_FLOOR, DB_GRID, FREQ_GRID, FREQ_MAX, FREQ_MIN, MODE_BOTH, MODE_DIFF,
+    AnalyzerCore, DB_FLOOR, DB_GRID, FREQ_GRID, FREQ_MAX, FREQ_MIN, MODE_BOTH, MODE_DIFF,
     MODE_LEFT, MODE_RIGHT, MODE_SUM, SpectrumData, cqt_center_frequencies, db_to_y, format_freq,
-    freq_to_x, spawn_analyzer_worker, x_to_freq,
+    freq_to_x, x_to_freq,
 };
 use crate::registry::InstanceId;
 use crate::shmem::{FileRegistry, SharedMemoryWriter};
@@ -52,7 +49,7 @@ impl ChannelMode {
 
 /// Plugin-owned state the receiverless `editor(params)` needs but that
 /// isn't a parameter: the live spectrum the worker writes and this
-/// instance's registry id. `TruceAnalyzer::new` fills it (see the
+/// instance's registry id. The analyzer's `init` fills it (see the
 /// `#[skip]` field on the params below).
 struct EditorBridge {
     spectrum: Arc<SpectrumData>,
@@ -77,6 +74,100 @@ pub struct TruceAnalyzerParams {
     /// reach the spectrum + instance id through the shared `Arc<Params>`.
     #[skip]
     editor_bridge: Arc<OnceLock<EditorBridge>>,
+
+    /// The audio->worker tap + the CQT worker state, shared so the
+    /// receiverless `run_task(task, &params)` reaches them. A `#[skip]`
+    /// field (not a parameter); its `Default` builds the tap, registers
+    /// the instance, and creates the shared-memory mirror.
+    #[skip]
+    pub worker: Arc<AnalyzerShared>,
+}
+
+/// Sample-rate reset signal to the analysis thread. `reset` writes the
+/// new rate and bumps `version`; the worker calls `AnalyzerCore::reset`
+/// the next time it sees a version it hasn't applied. The core lives in
+/// the worker thread, so this atomic hand-off is how the audio side
+/// reaches it without a lock.
+#[derive(Default)]
+struct AnalyzerReset {
+    sample_rate_bits: AtomicU32,
+    version: AtomicU32,
+}
+
+/// Interleaved-stereo tap plus the dedicated analysis thread, shared
+/// between the audio thread (`push_frames` in `process`) and the worker
+/// (which drains the tap and runs the CQT). Lives on the params as a
+/// `#[skip]` field so `process` reaches it through `&params` - the same
+/// shared-`Arc` mechanism as the editor bridge above.
+pub struct AnalyzerShared {
+    tap: Arc<AudioTap<f32>>,
+    reset: Arc<AnalyzerReset>,
+    /// The dedicated consumer thread; owns the `AnalyzerCore` and joins on
+    /// drop. Kept alive by this field, not read directly.
+    _worker: StreamWorker,
+    /// A clone of the spectrum the core writes, handed to `editor(params)`.
+    spectrum: Arc<SpectrumData>,
+    instance_id: InstanceId,
+}
+
+/// Stereo ring capacity. 32768 frames is ~170 ms at 192 kHz and >700 ms
+/// at 44.1 kHz - more than any realistic scheduling gap for the analysis
+/// thread, with drop-on-full as the safety net if it stalls.
+const TAP_CAPACITY_FRAMES: usize = 32 * 1024;
+
+impl Default for AnalyzerShared {
+    fn default() -> Self {
+        let freqs = cqt_center_frequencies();
+        let spectrum = Arc::new(SpectrumData::new(freqs));
+        let instance_id = registry::register(None, spectrum.clone());
+        let instance_name = registry::name_of(instance_id).unwrap_or_default();
+        let mut core = AnalyzerCore::new(spectrum.clone());
+        if let Some(shmem) =
+            SharedMemoryWriter::create(instance_id.0, &instance_name, spectrum.num_bins())
+        {
+            core.set_shmem_writer(shmem);
+        }
+        let mut file_reg = FileRegistry::load();
+        file_reg.add(instance_id.0, &instance_name);
+
+        let tap = Arc::new(AudioTap::new(TAP_CAPACITY_FRAMES, 2));
+        let reset = Arc::new(AnalyzerReset::default());
+        let reset_worker = Arc::clone(&reset);
+        let mut applied_version = 0;
+        // The core is owned entirely by this thread: it is the only
+        // reader/writer, so no lock. `push_frames` unparks it each block.
+        let worker = tap.clone().spawn_worker("truce-analyzer", move |chunk| {
+            let version = reset_worker.version.load(Ordering::Acquire);
+            if version != applied_version {
+                applied_version = version;
+                let sr = f64::from(f32::from_bits(
+                    reset_worker.sample_rate_bits.load(Ordering::Relaxed),
+                ));
+                if sr > 0.0 {
+                    core.reset(sr);
+                }
+            }
+            for frame in chunk.chunks_exact(2) {
+                core.process_stereo(frame[0], frame[1]);
+            }
+        });
+
+        Self {
+            tap,
+            reset,
+            _worker: worker,
+            spectrum,
+            instance_id,
+        }
+    }
+}
+
+impl Drop for AnalyzerShared {
+    fn drop(&mut self) {
+        registry::deregister(self.instance_id);
+        let mut file_reg = FileRegistry::load();
+        file_reg.remove(self.instance_id.0);
+    }
 }
 
 use TruceAnalyzerParamsParamId as P;
@@ -85,114 +176,79 @@ use TruceAnalyzerParamsParamId as P;
 // Plugin
 // ---------------------------------------------------------------------------
 
-pub struct TruceAnalyzer {
-    params: Arc<TruceAnalyzerParams>,
-    /// Shared spectrum atomics: the worker writes, the editor reads.
-    spectrum: Arc<SpectrumData>,
-    /// Audio thread pushes interleaved stereo samples here; the worker
-    /// drains. `ringbuf` is sample-oriented, so the buffer holds
-    /// `TAP_CAPACITY_FRAMES * 2` `f32`s. Drop-on-full lives in
-    /// `process()` and is kept frame-aligned so the worker never
-    /// desyncs L/R.
-    tap_tx: HeapProd<f32>,
-    /// Scratch for one process block's worth of interleaved stereo.
-    /// Pre-sized in `reset()`; `push_stereo_frames` is the only
-    /// realtime-safe consumer.
+/// Stateless descriptor - the analyzer's per-instance state lives on the
+/// params (`AnalyzerShared`, the tap + CQT worker) and in the
+/// shell-owned [`TruceAnalyzerDsp`] (the audio-thread scratch + persisted
+/// UI state).
+pub struct TruceAnalyzer;
+
+pub struct TruceAnalyzerDsp {
+    /// Scratch for one process block's worth of interleaved stereo,
+    /// pre-sized in `reset()` so `AudioTap::push_frames` never allocates.
     scratch: Vec<f32>,
-    /// Joined + shut down on drop.
-    worker: AnalyzerWorker,
+    /// This instance's registry id, copied from `params.worker` in
+    /// `init`. `load_state` uses it to rename the registry entry.
     instance_id: InstanceId,
     state: PersistentState,
 }
 
-/// Stereo ring capacity. 32768 frames is ~170 ms at 192 kHz and >700 ms
-/// at 44.1 kHz — comfortably more than any realistic worker scheduling
-/// gap, with drop-on-full providing a safety net if the worker stalls.
-const TAP_CAPACITY_FRAMES: usize = 32 * 1024;
-
-/// Push interleaved stereo samples into `tap_tx`, never splitting a
-/// frame. The buffer is sample-typed, so a naive `push_slice` could
-/// drop an odd number of samples when the consumer is stalled, which
-/// would desync L/R for every subsequent frame. Rounding the vacant
-/// window down to an even count keeps drop-on-full frame-aligned.
-fn push_stereo_frames(tap_tx: &mut HeapProd<f32>, samples: &[f32]) {
-    debug_assert!(
-        samples.len().is_multiple_of(2),
-        "scratch is always paired L,R"
-    );
-    let vacant_aligned = tap_tx.vacant_len() & !1;
-    let push_len = samples.len().min(vacant_aligned);
-    let _ = tap_tx.push_slice(&samples[..push_len]);
-}
-
-impl TruceAnalyzer {
-    pub fn new(params: Arc<TruceAnalyzerParams>) -> Self {
-        let freqs = cqt_center_frequencies();
-        let spectrum = Arc::new(SpectrumData::new(freqs));
-
-        let instance_id = registry::register(None, spectrum.clone());
-        let instance_name = registry::name_of(instance_id).unwrap_or_default();
-
-        // Hand the spectrum + id to the shared params so the
-        // receiverless `editor(params)` can build the GUI without `self`.
-        let _ = params.editor_bridge.set(EditorBridge {
-            spectrum: spectrum.clone(),
-            instance_id,
-        });
-
-        let shmem_writer =
-            SharedMemoryWriter::create(instance_id.0, &instance_name, spectrum.num_bins());
-
-        // Interleaved stereo: capacity is frames × 2 samples.
-        let (tap_tx, tap_rx) = HeapRb::<f32>::new(TAP_CAPACITY_FRAMES * 2).split();
-        let worker = spawn_analyzer_worker(spectrum.clone(), tap_rx, shmem_writer);
-
-        let mut file_reg = FileRegistry::load();
-        file_reg.add(instance_id.0, &instance_name);
-
+impl Default for TruceAnalyzerDsp {
+    fn default() -> Self {
+        // A placeholder id; `init` overwrites it with the registered id
+        // from `params.worker`. The leaf trait only requires `Default`,
+        // but the analyzer overrides `init`, which is what actually runs.
         Self {
-            params,
-            spectrum,
-            tap_tx,
             scratch: Vec::new(),
-            worker,
-            instance_id,
-            state: PersistentState {
-                instance_name,
-                ..Default::default()
-            },
+            instance_id: InstanceId(0),
+            state: PersistentState::default(),
         }
-    }
-}
-
-impl Drop for TruceAnalyzer {
-    fn drop(&mut self) {
-        registry::deregister(self.instance_id);
-        let mut file_reg = FileRegistry::load();
-        file_reg.remove(self.instance_id.0);
     }
 }
 
 impl PluginLogic for TruceAnalyzer {
     type Params = TruceAnalyzerParams;
+    type DspState = TruceAnalyzerDsp;
 
-    fn bus_layouts() -> Vec<BusLayout> {
-        vec![BusLayout::stereo()]
+    fn init(params: &Self::Params, _cx: &InitContext) -> Self::DspState {
+        let shared = &params.worker;
+        // Hand the spectrum + id to the shared params so the
+        // receiverless `editor(params)` can build the GUI without `self`.
+        let _ = params.editor_bridge.set(EditorBridge {
+            spectrum: shared.spectrum.clone(),
+            instance_id: shared.instance_id,
+        });
+        TruceAnalyzerDsp {
+            scratch: Vec::new(),
+            instance_id: shared.instance_id,
+            state: PersistentState {
+                instance_name: registry::name_of(shared.instance_id).unwrap_or_default(),
+                ..PersistentState::default()
+            },
+        }
     }
 
-    fn reset(&mut self, sr: f64, bs: usize) {
-        self.params.set_sample_rate(sr);
-        // Size the push scratch to one block of interleaved stereo. A
-        // one-block margin lets us push the entire process() block in
-        // a single `push_slice` call and keeps `Vec::clear` cheap.
-        if self.scratch.capacity() < bs * 2 {
-            self.scratch = Vec::with_capacity(bs * 2);
+    fn reset(state: &mut Self::DspState, params: &Self::Params, config: &AudioConfig) {
+        // The shell sets the params sample rate + snaps smoothers before
+        // this runs, so we only handle plugin-owned DSP state here.
+        //
+        // Size the push scratch to one block of interleaved stereo so the
+        // whole block pushes into the tap in one `push_frames` call.
+        let bs = config.max_block_size;
+        if state.scratch.capacity() < bs * 2 {
+            state.scratch = Vec::with_capacity(bs * 2);
         }
-        self.worker.reset(sr);
+        // Hand the new sample rate to the analysis thread; it resets the
+        // CQT on its next drain (the core lives in that thread).
+        let reset = &params.worker.reset;
+        reset
+            .sample_rate_bits
+            .store(config.sample_rate.to_f32().to_bits(), Ordering::Relaxed);
+        reset.version.fetch_add(1, Ordering::Release);
     }
 
     fn process(
-        &mut self,
+        state: &mut Self::DspState,
+        params: &Self::Params,
         buffer: &mut AudioBuffer,
         _events: &EventList,
         _context: &mut ProcessContext,
@@ -201,22 +257,23 @@ impl PluginLogic for TruceAnalyzer {
         if channels == 0 {
             return ProcessStatus::Normal;
         }
-        // The worker reads `mode()` itself; the audio thread only needs
+        let shared = &params.worker;
+        // The consumer reads `mode()` itself; the audio thread only needs
         // to update the shared value in response to param / remote
         // changes.
-        let mode = if self.spectrum.has_remotes() {
+        let mode = if shared.spectrum.has_remotes() {
             MODE_SUM
         } else {
-            self.params.channel.value().as_mode_u8()
+            params.channel.value().as_mode_u8()
         };
-        self.spectrum.set_mode(mode);
+        shared.spectrum.set_mode(mode);
 
-        self.scratch.clear();
+        state.scratch.clear();
         for i in 0..buffer.num_samples() {
-            // `.read()` returns `f64` under `prelude64m` — the
-            // gain multiply runs in `f64`, then narrows once when
-            // we write back into the `f32` host buffer.
-            let gain = db_to_linear(self.params.gain.read());
+            // `.read()` returns `f64` under `prelude64m` - the gain
+            // multiply runs in `f64`, then narrows once when we write
+            // back into the `f32` host buffer.
+            let gain = db_to_linear(params.gain.read());
 
             let mut left = 0.0f32;
             let mut right = 0.0f32;
@@ -233,35 +290,37 @@ impl PluginLogic for TruceAnalyzer {
                 right = left;
             }
 
-            // Realtime-safe: `scratch` was sized to `bs * 2` in reset,
-            // so `push` here never reallocates under normal host block
-            // sizes. If a host exceeds the last-reset block size we
-            // flush early rather than allocate.
-            if self.scratch.len() + 2 > self.scratch.capacity() {
-                push_stereo_frames(&mut self.tap_tx, &self.scratch);
-                self.scratch.clear();
+            // `scratch` was sized to `bs * 2` in reset, so the push here
+            // never reallocates under normal host block sizes. If a host
+            // exceeds the last-reset block size we flush early (the tap's
+            // push is wait-free) rather than allocate.
+            if state.scratch.len() + 2 > state.scratch.capacity() {
+                shared.tap.push_frames(&state.scratch);
+                state.scratch.clear();
             }
-            self.scratch.push(left);
-            self.scratch.push(right);
+            state.scratch.push(left);
+            state.scratch.push(right);
         }
-        if !self.scratch.is_empty() {
-            push_stereo_frames(&mut self.tap_tx, &self.scratch);
-            self.scratch.clear();
+        if !state.scratch.is_empty() {
+            // `push_frames` unparks the analysis thread, so a separate
+            // wake is unnecessary.
+            shared.tap.push_frames(&state.scratch);
         }
         ProcessStatus::Normal
     }
 
-    fn save_state(&self) -> Vec<u8> {
-        StateTrait::serialize(&self.state)
+    fn snapshot_into(state: &Self::DspState, buf: &mut Vec<u8>) -> bool {
+        StateTrait::serialize_into(&state.state, buf);
+        true
     }
 
-    fn load_state(&mut self, data: &[u8]) -> Result<(), StateLoadError> {
+    fn load_state(state: &mut Self::DspState, data: &[u8]) -> Result<(), StateLoadError> {
         match <PersistentState as StateTrait>::deserialize(data) {
             Some(ps) => {
                 if !ps.instance_name.is_empty() {
-                    registry::rename(self.instance_id, &ps.instance_name);
+                    registry::rename(state.instance_id, &ps.instance_name);
                 }
-                self.state = ps;
+                state.state = ps;
                 Ok(())
             }
             None => Err(StateLoadError::Malformed("PersistentState")),
@@ -658,7 +717,7 @@ fn draw_central(ui: &mut egui::Ui, ui_state: &UiState) {
 // ---------------------------------------------------------------------------
 
 fn draw_grid(painter: &egui::Painter, rect: egui::Rect) {
-    let stroke = egui::Stroke::new(0.5, GRID_COLOR);
+    let stroke = egui::Stroke::new(0.5_f32, GRID_COLOR);
 
     for &db in DB_GRID {
         let y = db_to_y(db, rect.top(), rect.height());
@@ -729,7 +788,7 @@ fn draw_spectrum(
 
     painter.add(egui::Shape::line(
         curve_points,
-        egui::Stroke::new(1.5, stroke_color),
+        egui::Stroke::new(1.5_f32, stroke_color),
     ));
 }
 
@@ -756,7 +815,7 @@ fn draw_diff_spectrum(
             egui::pos2(rect.left(), center_y),
             egui::pos2(rect.right(), center_y),
         ],
-        egui::Stroke::new(0.5, egui::Color32::from_white_alpha(60)),
+        egui::Stroke::new(0.5_f32, egui::Color32::from_white_alpha(60)),
     );
 
     let n = diff_bins.len().min(center_freqs.len());
@@ -803,7 +862,7 @@ fn draw_diff_spectrum(
 
     painter.add(egui::Shape::line(
         stroke_points,
-        egui::Stroke::new(1.5, STROKE_GHOST),
+        egui::Stroke::new(1.5_f32, STROKE_GHOST),
     ));
 }
 
@@ -931,14 +990,14 @@ fn draw_hover(painter: &egui::Painter, pos: egui::Pos2, ui_state: &UiState, rect
             egui::pos2(pos.x, rect.top()),
             egui::pos2(pos.x, rect.bottom()),
         ],
-        egui::Stroke::new(0.5, crosshair),
+        egui::Stroke::new(0.5_f32, crosshair),
     );
     painter.line_segment(
         [
             egui::pos2(rect.left(), pos.y),
             egui::pos2(rect.right(), pos.y),
         ],
-        egui::Stroke::new(0.5, crosshair),
+        egui::Stroke::new(0.5_f32, crosshair),
     );
 
     let freq = x_to_freq(pos.x, rect.left(), rect.width());
