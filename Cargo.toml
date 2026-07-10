@@ -1,6 +1,6 @@
 [package]
 name = "truce-analyzer"
-version = "3.1.2"
+version = "6.0.0"
 edition = "2024"
 
 [lib]
