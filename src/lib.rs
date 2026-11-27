@@ -473,7 +473,7 @@ fn draw_header(
     egui::Panel::top("header")
         .exact_size(30.0)
         .frame(egui::Frame::NONE.fill(theme::HEADER_BG))
-        .show_inside(ui, |ui| {
+        .show(ui, |ui| {
             ui.horizontal_centered(|ui| {
                 ui.add_space(10.0);
 
@@ -627,7 +627,7 @@ fn draw_header(
 fn draw_central(ui: &mut egui::Ui, ui_state: &UiState) {
     egui::CentralPanel::default()
         .frame(egui::Frame::NONE.fill(theme::BACKGROUND))
-        .show_inside(ui, |ui| {
+        .show(ui, |ui| {
             let (response, painter) =
                 ui.allocate_painter(ui.available_size(), egui::Sense::hover());
             let rect = response.rect;
