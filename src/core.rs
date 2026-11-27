@@ -445,7 +445,7 @@ impl AnalyzerCore {
             let idx = (self.ring_pos + i) % self.fft_size;
             let sample = match mode {
                 MODE_RIGHT => self.ring_right[idx],
-                MODE_SUM => (self.ring_left[idx] + self.ring_right[idx]) * 0.5,
+                MODE_SUM => f32::midpoint(self.ring_left[idx], self.ring_right[idx]),
                 MODE_DIFF => (self.ring_left[idx] - self.ring_right[idx]) * 0.5,
                 _ => self.ring_left[idx], // Left, Both (primary = L)
             };

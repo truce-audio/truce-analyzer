@@ -147,8 +147,8 @@ impl Default for AnalyzerShared {
                     core.reset(sr);
                 }
             }
-            for frame in chunk.chunks_exact(2) {
-                core.process_stereo(frame[0], frame[1]);
+            for &[left, right] in chunk.as_chunks::<2>().0 {
+                core.process_stereo(left, right);
             }
         });
 
@@ -1197,7 +1197,12 @@ mod tests {
 
         let mut diff_count = 0usize;
         let mut max_delta: u8 = 0;
-        for (cur, refp) in pixels.chunks_exact(4).zip(ref_pixels.chunks_exact(4)) {
+        for (cur, refp) in pixels
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .zip(ref_pixels.as_chunks::<4>().0)
+        {
             let delta = cur
                 .iter()
                 .zip(refp.iter())
